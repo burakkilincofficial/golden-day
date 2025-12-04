@@ -96,15 +96,25 @@ export async function redrawLotsAction(seed?: number) {
         }
         
         // Yeniden yükle
-        tracking = await db.monthTracking.findUnique({
+        const reloadedTracking = await db.monthTracking.findUnique({
           where: { id: tracking.id },
           include: { payments: true },
-        })!;
+        });
+        
+        if (!reloadedTracking) {
+          throw new Error(`Tracking bulunamadı: ${tracking.id}`);
+        }
+        
+        tracking = reloadedTracking;
       }
       
       // Format: MonthTracking tipine uygun
+      if (!tracking) {
+        throw new Error(`Tracking bulunamadı: month=${month}, year=${currentYear}`);
+      }
+      
       const payments: PaymentStatus[] = members.map((member) => {
-        const payment = tracking!.payments.find((p) => p.memberId === member.id);
+        const payment = tracking.payments.find((p) => p.memberId === member.id);
         return {
           memberId: member.id,
           memberName: member.name,
@@ -113,10 +123,10 @@ export async function redrawLotsAction(seed?: number) {
       });
       
       trackings.push({
-        id: tracking!.id,
-        month: tracking!.month,
-        year: tracking!.year,
-        hostMemberId: tracking!.hostMemberId || "",
+        id: tracking.id,
+        month: tracking.month,
+        year: tracking.year,
+        hostMemberId: tracking.hostMemberId || "",
         hostMemberName: hostMember.name,
         payments,
       });

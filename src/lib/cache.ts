@@ -15,9 +15,21 @@ interface CachedPrice {
 }
 
 /**
+ * KV'nin kullanılabilir olup olmadığını kontrol et
+ */
+function isKVAvailable(): boolean {
+  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+/**
  * Cache'den altın fiyatlarını al
+ * Local'de KV yoksa null döner
  */
 export async function getCachedPrice(): Promise<CachedPrice | null> {
+  if (!isKVAvailable()) {
+    return null;
+  }
+  
   try {
     const cached = await kv.get<CachedPrice>(CACHE_KEY);
     if (!cached) return null;
@@ -35,13 +47,13 @@ export async function getCachedPrice(): Promise<CachedPrice | null> {
     
     return cached;
   } catch (error) {
-    console.error("Cache okuma hatası:", error);
     return null;
   }
 }
 
 /**
  * Altın fiyatlarını cache'e kaydet
+ * Local'de KV yoksa sessizce devam eder
  */
 export async function setCachedPrice(data: {
   gram: number;
@@ -50,6 +62,10 @@ export async function setCachedPrice(data: {
   full: number;
   updatedAt: string;
 }): Promise<void> {
+  if (!isKVAvailable()) {
+    return;
+  }
+  
   try {
     const cacheData: CachedPrice = {
       data,
@@ -59,8 +75,7 @@ export async function setCachedPrice(data: {
     // 8 saat TTL ile kaydet
     await kv.set(CACHE_KEY, cacheData, { ex: CACHE_TTL });
   } catch (error) {
-    console.error("Cache kayıt hatası:", error);
-    // Hata durumunda sessizce devam et
+    // Hata durumunda sessizce devam et (local'de KV yoksa normal)
   }
 }
 

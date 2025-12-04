@@ -16,17 +16,28 @@ export function getMockMembers(): Member[] {
   return baseMembers;
 }
 
+/**
+ * Mock gold price - CollectAPI response'una göre güncellendi
+ * Gerçek API başarısız olursa bu kullanılır
+ */
 export function getMockGoldPrice(): GoldPriceSnapshot {
-  const gram = 2570;
+  // CollectAPI'den gelen gerçek değerler (2025-12-04)
+  const gram = 5755; // Gram Altın: 5754.89
+  const quarter = 9313; // Çeyrek Altın: 9313.26
+  const half = 18627; // Yarım Altın: 18626.53
+  const full = 37138; // Tam Altın: 37138.07
+  
   return {
     gram,
-    quarter: Math.round(gram * 1.75),
-    half: Math.round(gram * 3.5),
-    full: Math.round(gram * 7),
+    quarter,
+    half,
+    full,
     updatedAt: new Date().toLocaleDateString("tr-TR", {
       day: "2-digit",
       month: "2-digit",
-      year: "numeric"
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
     })
   };
 }

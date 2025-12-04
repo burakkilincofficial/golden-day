@@ -2,15 +2,28 @@ import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { getGoldPriceAction } from "./actions/gold-price";
 import { getMembersAction } from "./actions/members";
 import { getTrackingAction } from "./actions/tracking";
+import type { Member, MonthTracking } from "@/types/gold-day";
 
 export default async function HomePage() {
-  // Database'den üyeleri çek
-  const membersResult = await getMembersAction();
-  const members = membersResult.success ? membersResult.members : [];
+  // Database'den üyeleri çek (hata olursa boş array döner)
+  let members: Member[] = [];
+  let initialTracking: MonthTracking[] = [];
   
-  // Database'den takipleri çek
-  const trackingResult = await getTrackingAction();
-  const initialTracking = trackingResult.success ? trackingResult.trackings : [];
+  try {
+    const membersResult = await getMembersAction();
+    members = membersResult.success ? membersResult.members : [];
+  } catch (error) {
+    console.error("Üyeler getirilemedi (database bağlantısı yok):", error);
+    // Local'de database yoksa boş array ile devam et
+  }
+  
+  try {
+    const trackingResult = await getTrackingAction();
+    initialTracking = trackingResult.success ? trackingResult.trackings : [];
+  } catch (error) {
+    console.error("Takip getirilemedi (database bağlantısı yok):", error);
+    // Local'de database yoksa boş array ile devam et
+  }
   
   // Gerçek API'den altın fiyatlarını çek
   let goldPrice;

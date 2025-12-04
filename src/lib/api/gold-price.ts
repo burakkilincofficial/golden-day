@@ -62,18 +62,35 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
     if (data.result && Array.isArray(data.result)) {
       data.result.forEach((item: any) => {
         const name = (item.name || "").toLowerCase();
-        const buying = parseFloat(item.buying || item.price || "0");
         
-        if (name.includes("gram") || name.includes("gr")) {
+        // buying number olabilir veya buyingstr string olabilir
+        let buying: number;
+        if (item.buying !== undefined && item.buying !== null) {
+          buying = typeof item.buying === "string" 
+            ? parseFloat(item.buying.replace(/[^\d.,]/g, "").replace(",", "."))
+            : Number(item.buying);
+        } else if (item.buyingstr) {
+          buying = parseFloat(item.buyingstr.replace(/[^\d.,]/g, "").replace(",", "."));
+        } else {
+          buying = 0;
+        }
+        
+        // Tam eşleşme kontrolü (sadece "Gram Altın", "Çeyrek Altın" vs.)
+        if (name === "gram altın") {
           gram = Math.round(buying);
-        } else if (name.includes("çeyrek") || name.includes("ceyrek") || name.includes("quarter")) {
+        } else if (name === "çeyrek altın" && !name.includes("eski")) {
           quarter = Math.round(buying);
-        } else if (name.includes("yarım") || name.includes("yarim") || name.includes("half")) {
+        } else if (name === "yarım altın" && !name.includes("eski")) {
           half = Math.round(buying);
-        } else if (name.includes("tam") || name.includes("full")) {
+        } else if (name === "tam altın" && !name.includes("eski") && !name.includes("çeyrek") && !name.includes("yarım")) {
           full = Math.round(buying);
         }
       });
+    }
+    
+    // Debug: Parse edilen değerleri kontrol et
+    if (gram === 0 && quarter === 0) {
+      console.log(`   ⚠️  Hiçbir altın tipi parse edilemedi. Response:`, JSON.stringify(data.result?.slice(0, 3), null, 2));
     }
     
     // Eğer gram varsa ama diğerleri yoksa hesapla
