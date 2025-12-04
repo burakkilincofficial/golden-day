@@ -66,6 +66,8 @@ function seededShuffle<T>(array: T[], seed: number): T[] {
 
 /**
  * Yeni bir kura çeker ve 12 aylık tracking oluşturur
+ * Artık kullanılmıyor - database'den geliyor
+ * Sadece backward compatibility için
  */
 export function createNewDraw(
   members: Member[],
@@ -79,17 +81,23 @@ export function createNewDraw(
   // Seed olarak timestamp kullan (veya verilen seed'i kullan)
   const drawSeed = seed ?? Date.now();
   const shuffled = seededShuffle(members, drawSeed);
+  const currentYear = new Date().getFullYear();
 
-  return Array.from({ length: monthsToGenerate }, (_, monthIndex) => {
+  return Array.from({ length: monthsToGenerate }, (_, index) => {
     // Üyeleri döngüsel olarak atar (eğer üye sayısı 12'den azsa tekrar eder)
-    const host = shuffled[monthIndex % shuffled.length];
+    const host = shuffled[index % shuffled.length];
+    const month = index + 1; // 1-12 (Ocak-Aralık)
 
     return {
-      monthIndex,
-      hostId: host.id,
+      id: `mock-${month}-${currentYear}`,
+      month,
+      year: currentYear,
+      hostMemberId: host.id,
+      hostMemberName: host.name,
       payments: members.map((m) => ({
         memberId: m.id,
-        hasPaid: false
+        memberName: m.name,
+        paid: false
       }))
     };
   });
@@ -97,6 +105,7 @@ export function createNewDraw(
 
 /**
  * İlk tracking oluşturma (backward compatibility)
+ * Artık kullanılmıyor - database'den geliyor
  */
 export function createInitialTracking(
   members: Member[],

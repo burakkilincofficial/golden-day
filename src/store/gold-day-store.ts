@@ -5,7 +5,7 @@ import { createNewDraw } from "@/lib/mock-data";
 interface GoldDayState {
   members: Member[];
   tracking: MonthTracking[];
-  togglePayment: (monthIndex: number, memberId: MemberId) => void;
+  togglePayment: (month: number, memberId: MemberId) => void; // month: 1-12
   resetPayments: () => void;
   addMember: (name: string) => void;
   removeMember: (memberId: MemberId) => void;
@@ -17,15 +17,15 @@ interface GoldDayState {
 export const useGoldDayStore = create<GoldDayState>((set) => ({
   members: [],
   tracking: [],
-  togglePayment: (monthIndex, memberId) =>
+  togglePayment: (month, memberId) =>
     set((state) => ({
-      tracking: state.tracking.map((month) => {
-        if (month.monthIndex !== monthIndex) return month;
+      tracking: state.tracking.map((tracking) => {
+        if (tracking.month !== month) return tracking;
         return {
-          ...month,
-          payments: month.payments.map((p) =>
+          ...tracking,
+          payments: tracking.payments.map((p) =>
             p.memberId === memberId
-              ? { ...p, hasPaid: !p.hasPaid }
+              ? { ...p, paid: !p.paid }
               : p
           )
         };
@@ -33,11 +33,11 @@ export const useGoldDayStore = create<GoldDayState>((set) => ({
     })),
   resetPayments: () =>
     set((state) => ({
-      tracking: state.tracking.map((month) => ({
-        ...month,
-        payments: month.payments.map((p) => ({
+      tracking: state.tracking.map((tracking) => ({
+        ...tracking,
+        payments: tracking.payments.map((p) => ({
           ...p,
-          hasPaid: false
+          paid: false
         }))
       }))
     })),
@@ -50,11 +50,11 @@ export const useGoldDayStore = create<GoldDayState>((set) => ({
       const updatedMembers = [...state.members, newMember];
       
       // Yeni üyeyi tüm ayların payment listesine ekle
-      const updatedTracking = state.tracking.map((month) => ({
-        ...month,
+      const updatedTracking = state.tracking.map((tracking) => ({
+        ...tracking,
         payments: [
-          ...month.payments,
-          { memberId: newMember.id, hasPaid: false }
+          ...tracking.payments,
+          { memberId: newMember.id, memberName: newMember.name, paid: false }
         ]
       }));
 
@@ -68,13 +68,16 @@ export const useGoldDayStore = create<GoldDayState>((set) => ({
       const updatedMembers = state.members.filter((m) => m.id !== memberId);
       
       // Üyeyi tüm ayların payment listesinden çıkar
-      const updatedTracking = state.tracking.map((month) => ({
-        ...month,
-        payments: month.payments.filter((p) => p.memberId !== memberId),
+      const updatedTracking = state.tracking.map((tracking) => ({
+        ...tracking,
+        payments: tracking.payments.filter((p) => p.memberId !== memberId),
         // Eğer silinen üye ev sahibi ise, ilk üyeyi ev sahibi yap
-        hostId: month.hostId === memberId 
-          ? (updatedMembers[0]?.id ?? month.hostId)
-          : month.hostId
+        hostMemberId: tracking.hostMemberId === memberId 
+          ? (updatedMembers[0]?.id ?? tracking.hostMemberId)
+          : tracking.hostMemberId,
+        hostMemberName: tracking.hostMemberId === memberId
+          ? (updatedMembers[0]?.name ?? tracking.hostMemberName)
+          : tracking.hostMemberName
       }));
 
       return {
@@ -96,7 +99,7 @@ export const useGoldDayStore = create<GoldDayState>((set) => ({
       // Mevcut ödeme durumlarını yeni tracking'e aktar
       const trackingWithPayments = newTracking.map((newMonth) => {
         const oldMonth = state.tracking.find(
-          (m) => m.monthIndex === newMonth.monthIndex
+          (m) => m.month === newMonth.month && m.year === newMonth.year
         );
         
         if (oldMonth) {
@@ -110,7 +113,8 @@ export const useGoldDayStore = create<GoldDayState>((set) => ({
             )
             .map((m) => ({
               memberId: m.id,
-              hasPaid: false
+              memberName: m.name,
+              paid: false
             }));
 
           return {

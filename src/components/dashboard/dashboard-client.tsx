@@ -353,7 +353,7 @@ export function DashboardClient({
                                   const newPaidStatus = !(payment?.paid || false);
                                   await updatePaymentAction(month.id, member.id, newPaidStatus);
                                   // Store'u güncelle
-                                  togglePayment(month.month - 1, member.id);
+                                  togglePayment(month.month, member.id);
                                   // Sayfayı yenile (server-side sync için)
                                   window.location.reload();
                                 }}
