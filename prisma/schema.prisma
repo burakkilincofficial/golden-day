@@ -7,10 +7,10 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // Öncelik sırası: PRISMA_DATABASE_URL > DATABASE_URL > POSTGRES_PRISMA_URL
-  // Prisma Accelerate için: PRISMA_DATABASE_URL
   // Standart Vercel Postgres için: DATABASE_URL veya POSTGRES_PRISMA_URL
-  url      = env("PRISMA_DATABASE_URL")
+  // Prisma Accelerate için: PRISMA_DATABASE_URL (opsiyonel)
+  // Öncelik: DATABASE_URL > POSTGRES_PRISMA_URL > PRISMA_DATABASE_URL
+  url      = env("DATABASE_URL")
   // Direct connection için: POSTGRES_URL veya POSTGRES_URL_NON_POOLING
   directUrl = env("POSTGRES_URL")
 }
