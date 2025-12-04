@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import type { Member, MemberId, MonthTracking } from "@/types/gold-day";
 import { createNewDraw } from "@/lib/mock-data";
 
@@ -16,9 +15,7 @@ interface GoldDayState {
   redrawLots: () => void;
 }
 
-export const useGoldDayStore = create<GoldDayState>()(
-  persist(
-    (set) => ({
+export const useGoldDayStore = create<GoldDayState>((set) => ({
   members: [],
   tracking: [],
   togglePayment: (month, memberId) =>
@@ -159,13 +156,6 @@ export const useGoldDayStore = create<GoldDayState>()(
         tracking: trackingWithPayments
       };
     })
-  }),
-  {
-    name: "gold-day-storage", // localStorage key
-    // Sadece tracking'i persist et (members database'den geliyor)
-    partialize: (state) => ({ tracking: state.tracking }),
-  }
-  )
-);
+}));
 
 
