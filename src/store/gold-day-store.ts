@@ -9,6 +9,7 @@ interface GoldDayState {
   resetPayments: () => void;
   addMember: (name: string) => void;
   removeMember: (memberId: MemberId) => void;
+  updateMember: (memberId: MemberId, newName: string) => void;
   setMembers: (members: Member[]) => void;
   setTracking: (tracking: MonthTracking[]) => void;
   redrawLots: () => void;
@@ -71,12 +72,37 @@ export const useGoldDayStore = create<GoldDayState>((set) => ({
       const updatedTracking = state.tracking.map((tracking) => ({
         ...tracking,
         payments: tracking.payments.filter((p) => p.memberId !== memberId),
-        // Eğer silinen üye ev sahibi ise, ilk üyeyi ev sahibi yap
+        // Eğer silinen üye ev sahibi ise, ilk üyeyi ev sahibi yap (veya null)
         hostMemberId: tracking.hostMemberId === memberId 
-          ? (updatedMembers[0]?.id ?? tracking.hostMemberId)
+          ? (updatedMembers[0]?.id ?? null)
           : tracking.hostMemberId,
         hostMemberName: tracking.hostMemberId === memberId
-          ? (updatedMembers[0]?.name ?? tracking.hostMemberName)
+          ? (updatedMembers[0]?.name ?? "")
+          : tracking.hostMemberName
+      }));
+
+      return {
+        members: updatedMembers,
+        tracking: updatedTracking
+      };
+    }),
+  updateMember: (memberId, newName) =>
+    set((state) => {
+      const updatedMembers = state.members.map((m) =>
+        m.id === memberId ? { ...m, name: newName.trim() } : m
+      );
+      
+      // Tüm tracking'lerdeki memberName'leri güncelle
+      const updatedTracking = state.tracking.map((tracking) => ({
+        ...tracking,
+        payments: tracking.payments.map((p) =>
+          p.memberId === memberId
+            ? { ...p, memberName: newName.trim() }
+            : p
+        ),
+        // Eğer güncellenen üye ev sahibi ise, hostMemberName'i de güncelle
+        hostMemberName: tracking.hostMemberId === memberId
+          ? newName.trim()
           : tracking.hostMemberName
       }));
 

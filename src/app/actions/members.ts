@@ -81,8 +81,11 @@ export async function addMemberAction(name: string) {
     });
     
     // Tüm mevcut aylık takipler için ödeme kaydı oluştur
+    // NOT: Yeni tracking oluşturulmaz, sadece mevcut tracking'lere payment eklenir
+    // Kura çek butonuna basıldığında tracking'ler güncellenir
     const trackings = await db.monthTracking.findMany({
       where: { groupId: group.id },
+      orderBy: [{ year: "asc" }, { month: "asc" }],
     });
     
     for (const tracking of trackings) {
@@ -131,12 +134,8 @@ export async function removeMemberAction(memberId: string) {
       return { success: false, error: "Üye bulunamadı" };
     }
     
-    // Eğer bu üye bir ayın host'u ise, host'u null yap
-    await db.monthTracking.updateMany({
-      where: { hostMemberId: memberId },
-      data: { hostMemberId: null },
-    });
-    
+    // NOT: Tracking'ler silinmez, sadece üye ve payment'ları silinir
+    // Kura çek butonuna basıldığında tracking'ler güncellenir
     // Üyeyi sil (cascade ile ödemeler de silinir)
     await db.member.delete({
       where: { id: memberId },
@@ -149,6 +148,52 @@ export async function removeMemberAction(memberId: string) {
   } catch (error) {
     console.error("Üye silme hatası:", error);
     return { success: false, error: "Üye silinirken bir hata oluştu" };
+  }
+}
+
+/**
+ * Üye güncelle
+ */
+export async function updateMemberAction(memberId: string, newName: string) {
+  try {
+    // Validation
+    const validated = memberSchema.parse({ name: newName });
+    
+    // Üyeyi bul
+    const member = await db.member.findUnique({
+      where: { id: memberId },
+    });
+    
+    if (!member) {
+      return { success: false, error: "Üye bulunamadı" };
+    }
+    
+    // Üye adını güncelle
+    const updatedMember = await db.member.update({
+      where: { id: memberId },
+      data: {
+        name: validated.name.trim(),
+      },
+    });
+    
+    // Tüm payment kayıtlarındaki memberName'i güncelle (eğer gerekirse)
+    // Not: Payment tablosunda memberName yok, sadece memberId var
+    // Ama tracking'lerde memberName kullanılıyor, bu yüzden tracking'leri de güncellemek gerekebilir
+    // Şimdilik sadece member adını güncelliyoruz, tracking'lerdeki memberName client-side güncellenecek
+    
+    return { success: true, member: updatedMember };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.errors[0].message };
+    }
+    
+    // Prisma unique constraint hatası
+    if (error instanceof Error && error.message.includes("Unique constraint")) {
+      return { success: false, error: "Bu isimde bir üye zaten var" };
+    }
+    
+    console.error("Üye güncelleme hatası:", error);
+    return { success: false, error: "Üye güncellenirken bir hata oluştu" };
   }
 }
 

@@ -34,10 +34,11 @@ import {
 } from "@/components/ui/table";
 import { MemberManagement } from "@/components/members/member-management";
 import { Loader, LoaderOverlay } from "@/components/ui/loader";
-import { Shuffle, RefreshCw } from "lucide-react";
+import { Shuffle, RefreshCw, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getGoldPriceAction } from "@/app/actions/gold-price";
 import { redrawLotsAction, updatePaymentAction } from "@/app/actions/tracking";
+import { exportToExcel } from "@/lib/export-excel";
 
 interface DashboardClientProps {
   members: Member[];
@@ -79,22 +80,26 @@ export function DashboardClient({
   const [currentGoldPrice, setCurrentGoldPrice] = useState<GoldPriceSnapshot>(goldPrice);
   const [isRefreshingPrice, setIsRefreshingPrice] = useState(false);
 
-  // İlk mount'ta props'tan gelen verileri store'a yükle
+  // İlk mount'ta props'tan gelen verileri store'a yükle (sadece bir kez)
+  const [isInitialized, setIsInitialized] = useState(false);
+  
   useEffect(() => {
-    if (!storeMembers.length && members.length) {
+    if (!isInitialized) {
+      // İlk mount'ta props'ları store'a yükle
       setMembers(members);
-    }
-    if (!tracking.length && initialTracking.length) {
       setTracking(initialTracking);
+      setIsInitialized(true);
     }
-  }, [members, initialTracking, storeMembers.length, tracking.length, setMembers, setTracking]);
+  }, [isInitialized, members, initialTracking, setMembers, setTracking]);
 
-  // Store'dan güncel members'ı kullan
-  const currentMembers = storeMembers.length > 0 ? storeMembers : members;
+  // Store'dan güncel members'ı kullan (her zaman store'dan)
+  const currentMembers = storeMembers;
 
-  const activeMonthIndex = new Date().getMonth() + 1; // 1-12 (Ocak-Aralık)
+  const currentDate = new Date();
+  const activeMonthIndex = currentDate.getMonth() + 1; // 1-12 (Ocak-Aralık)
+  const activeYear = currentDate.getFullYear();
   const activeMonth =
-    tracking.find((m) => m.month === activeMonthIndex) ?? tracking[0];
+    tracking.find((m) => m.month === activeMonthIndex && m.year === activeYear) ?? tracking[0];
   const activeHost = currentMembers.find((m) => m.id === activeMonth?.hostMemberId);
 
   return (
@@ -183,7 +188,11 @@ export function DashboardClient({
             </CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-between gap-4 text-sm">
-            {activeMonth && activeHost ? (
+            {currentMembers.length === 0 ? (
+              <p className="text-xs text-muted-foreground w-full text-center py-2">
+                Henüz üye eklenmemiş. Üye ekleyip kura çekin.
+              </p>
+            ) : activeMonth && activeHost ? (
               <>
                 <div>
                   <p className="text-xs text-muted-foreground">
@@ -215,9 +224,13 @@ export function DashboardClient({
         <Card className="md:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
-              <CardTitle>12 Aylık Kura / Sıra</CardTitle>
+              <CardTitle>
+                {currentMembers.length > 0 
+                  ? `${currentMembers.length} Aylık Kura / Sıra`
+                  : "12 Aylık Kura / Sıra"}
+              </CardTitle>
               <CardDescription>
-                Rastgele atanmış 12 aylık zaman çizelgesi
+                Mevcut aydan başlayarak sırayla atanmış zaman çizelgesi
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -244,6 +257,21 @@ export function DashboardClient({
                 variant="outline"
                 size="sm"
                 type="button"
+                onClick={() => {
+                  if (tracking.length > 0 && currentMembers.length > 0) {
+                    exportToExcel(currentMembers, tracking);
+                  }
+                }}
+                disabled={tracking.length === 0 || currentMembers.length === 0}
+                title="Kura çekimi sonuçlarını Excel olarak indir"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Excel İndir
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
                 onClick={resetPayments}
                 disabled={isDrawing}
               >
@@ -258,7 +286,7 @@ export function DashboardClient({
               <ul className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                 {tracking.map((month) => {
                   const host = currentMembers.find((m) => m.id === month.hostMemberId);
-                  const isCurrent = month.month === activeMonthIndex;
+                  const isCurrent = month.month === activeMonthIndex && month.year === activeYear;
                   const paidCount = month.payments.filter(
                     (p) => p.paid
                   ).length;
@@ -276,6 +304,9 @@ export function DashboardClient({
                           <span className="h-2 w-2 rounded-full bg-gold-soft" />
                           <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                             {monthLabels[month.month - 1]}
+                            {month.year !== activeYear && (
+                              <span className="ml-1 text-[10px] normal-case">({month.year})</span>
+                            )}
                           </span>
                         </div>
                         <span className="text-[11px] text-muted-foreground">
@@ -306,71 +337,84 @@ export function DashboardClient({
             </div>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ay</TableHead>
-                  <TableHead>Ev Sahibi</TableHead>
-                  {currentMembers.map((member) => (
-                    <TableHead key={member.id}>{member.name}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tracking.map((month) => {
-                  const host = currentMembers.find((m) => m.id === month.hostMemberId);
+            {currentMembers.length === 0 ? (
+              <p className="text-center text-xs text-muted-foreground py-8">
+                Henüz üye eklenmemiş. Üye ekleyip kura çekin.
+              </p>
+            ) : tracking.length === 0 ? (
+              <p className="text-center text-xs text-muted-foreground py-8">
+                Henüz takip verisi oluşturulmadı. Kura çekin.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ay</TableHead>
+                    <TableHead>Ev Sahibi</TableHead>
+                    {currentMembers.map((member) => (
+                      <TableHead key={member.id}>{member.name}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tracking.map((month) => {
+                    const host = currentMembers.find((m) => m.id === month.hostMemberId);
 
-                  return (
-                    <TableRow key={month.id}>
-                      <TableCell className="text-xs sm:text-sm">
-                        {monthLabels[month.month - 1]}
-                      </TableCell>
-                      <TableCell className="text-xs sm:text-sm">
-                        {month.hostMemberName || "-"}
-                      </TableCell>
-                      {currentMembers.map((member) => {
-                        const payment = month.payments.find(
-                          (p) => p.memberId === member.id
-                        );
-                        const isHost = member.id === month.hostMemberId;
-
-                        if (!payment) {
-                          return (
-                            <TableCell key={member.id} className="text-center">
-                              -
-                            </TableCell>
+                    return (
+                      <TableRow key={month.id}>
+                        <TableCell className="text-xs sm:text-sm">
+                          {monthLabels[month.month - 1]}
+                          {month.year !== activeYear && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">({month.year})</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs sm:text-sm">
+                          {month.hostMemberName || "-"}
+                        </TableCell>
+                        {currentMembers.map((member) => {
+                          const payment = month.payments.find(
+                            (p) => p.memberId === member.id
                           );
-                        }
+                          const isHost = member.id === month.hostMemberId;
 
-                        return (
-                          <TableCell
-                            key={member.id}
-                            className="text-center"
-                          >
-                            {isHost ? (
-                              <span className="text-[11px] text-muted-foreground">
-                                Ev sahibi
-                              </span>
-                            ) : (
-                              <Checkbox
-                                checked={payment?.paid || false}
-                                onChange={async () => {
-                                  const newPaidStatus = !(payment?.paid || false);
+                          if (!payment) {
+                            return (
+                              <TableCell key={member.id} className="text-center">
+                                -
+                              </TableCell>
+                            );
+                          }
+
+                          return (
+                            <TableCell
+                              key={member.id}
+                              className="text-center"
+                            >
+                              {isHost ? (
+                                <span className="text-[11px] text-muted-foreground">
+                                  Ev sahibi
+                                </span>
+                              ) : (
+                                <Checkbox
+                                  checked={payment?.paid || false}
+                                  onChange={async () => {
+                                    const newPaidStatus = !(payment?.paid || false);
                                     await updatePaymentAction(month.id, member.id, newPaidStatus);
                                     // Store'u güncelle (optimistic update)
                                     togglePayment(month.month, member.id);
                                     // Sayfayı yenileme - client state güncellemesi yeterli
-                                }}
-                              />
-                            )}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                                  }}
+                                />
+                              )}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </section>
