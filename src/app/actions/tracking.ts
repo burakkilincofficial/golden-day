@@ -6,10 +6,6 @@ import type { MonthTracking, PaymentStatus } from "@/types/gold-day";
 
 const DEFAULT_GROUP_ID = "default-group";
 
-/**
- * Varsayılan grubu oluştur veya getir
- * Eğer table yoksa otomatik olarak oluşturur
- */
 async function getOrCreateDefaultGroup() {
   try {
     let group = await db.group.findFirst();
@@ -25,7 +21,6 @@ async function getOrCreateDefaultGroup() {
     
     return group;
   } catch (error: any) {
-    // Eğer table yoksa (P2021 hatası), schema'yı push et
     if (error?.code === 'P2021' || error?.message?.includes('does not exist')) {
       console.log('📦 Database schema bulunamadı, oluşturuluyor...');
       try {
@@ -33,7 +28,6 @@ async function getOrCreateDefaultGroup() {
         execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
         console.log('✅ Database schema oluşturuldu');
         
-        // Tekrar dene
         let group = await db.group.findFirst();
         if (!group) {
           group = await db.group.create({
@@ -53,14 +47,10 @@ async function getOrCreateDefaultGroup() {
   }
 }
 
-/**
- * Kura çek - Üyeleri yeniden sırala
- */
 export async function redrawLotsAction(seed?: number) {
   try {
     const group = await getOrCreateDefaultGroup();
     
-    // Tüm üyeleri al
     const members = await db.member.findMany({
       where: { groupId: group.id },
       orderBy: { createdAt: "asc" },
@@ -70,7 +60,6 @@ export async function redrawLotsAction(seed?: number) {
       return { success: false, error: "Üye yok, önce üye ekleyin" };
     }
     
-    // Mevcut takipleri al (ödeme durumlarını korumak için)
     const existingTrackings = await db.monthTracking.findMany({
       where: { groupId: group.id },
       include: {
@@ -78,43 +67,34 @@ export async function redrawLotsAction(seed?: number) {
       },
     });
     
-    // Üyeleri shuffle et (deterministic)
     const shuffled = seededShuffle([...members], seed);
     
-    // Mevcut ayı bul (1-12, Ocak-Aralık)
     const currentDate = new Date();
-    const currentMonth = currentDate.getMonth() + 1; // 1-12
+    const currentMonth = currentDate.getMonth() + 1;
     const currentYear = currentDate.getFullYear();
     
-    // Üye sayısı kadar ay göster (her üye sadece 1 kez)
     const totalMonths = members.length;
     const trackings: MonthTracking[] = [];
     
-    // Mevcut aydan başlayarak üye sayısı kadar ay için döngü
     for (let offset = 0; offset < totalMonths; offset++) {
-      // Mevcut aydan başlayarak sırayla ay hesapla
       const monthOffset = currentMonth - 1 + offset;
       const month = (monthOffset % 12) + 1;
       const year = currentYear + Math.floor(monthOffset / 12);
       
-      // Üye index'i: offset (her üye sırayla 1 kez, tekrar yok)
       const memberIndex = offset;
       const hostMember = shuffled[memberIndex];
       
-      // Mevcut takibi bul veya oluştur
       let tracking = existingTrackings.find(
         (t) => t.month === month && t.year === year
       );
       
       if (tracking) {
-        // Mevcut ödeme durumlarını koru, sadece host'u güncelle
         tracking = await db.monthTracking.update({
           where: { id: tracking.id },
           data: { hostMemberId: hostMember.id },
           include: { payments: true },
         });
       } else {
-        // Yeni takip oluştur
         tracking = await db.monthTracking.create({
           data: {
             groupId: group.id,
@@ -125,7 +105,6 @@ export async function redrawLotsAction(seed?: number) {
           include: { payments: true },
         });
         
-        // Tüm üyeler için ödeme kaydı oluştur
         for (const member of members) {
           await db.payment.create({
             data: {
@@ -136,7 +115,6 @@ export async function redrawLotsAction(seed?: number) {
           });
         }
         
-        // Yeniden yükle
         const reloadedTracking = await db.monthTracking.findUnique({
           where: { id: tracking.id },
           include: { payments: true },
@@ -149,7 +127,6 @@ export async function redrawLotsAction(seed?: number) {
         tracking = reloadedTracking;
       }
       
-      // Format: MonthTracking tipine uygun
       if (!tracking) {
         throw new Error(`Tracking bulunamadı: month=${month}, year=${year}`);
       }
@@ -173,16 +150,12 @@ export async function redrawLotsAction(seed?: number) {
       });
     }
     
-    // Fazla olan tracking'leri sil (eğer üye sayısı azaldıysa)
-    // Sadece oluşturulan tracking'lerin ID'lerini al
     const createdTrackingIds = trackings.map((t) => t.id);
     
-    // Tüm mevcut tracking'leri al
     const allExistingTrackings = await db.monthTracking.findMany({
       where: { groupId: group.id },
     });
     
-    // Oluşturulan tracking'lerin dışındaki tracking'leri sil
     const trackingsToDelete = allExistingTrackings.filter(
       (et) => !createdTrackingIds.includes(et.id)
     );
@@ -192,9 +165,6 @@ export async function redrawLotsAction(seed?: number) {
         where: { id: toDelete.id },
       });
     }
-    
-    // revalidatePath kaldırıldı - client state güncellemesi yeterli
-    // revalidatePath("/");
 
     return { success: true, trackings };
   } catch (error) {
@@ -203,9 +173,6 @@ export async function redrawLotsAction(seed?: number) {
   }
 }
 
-/**
- * Deterministic shuffle (seed ile)
- */
 function seededShuffle<T>(array: T[], seed?: number): T[] {
   const shuffled = [...array];
   const random = seed !== undefined ? seededRandom(seed) : Math.random;
@@ -226,9 +193,6 @@ function seededRandom(seed: number): () => number {
   };
 }
 
-/**
- * Ödeme durumunu güncelle
- */
 export async function updatePaymentAction(
   monthTrackingId: string,
   memberId: string,
@@ -253,9 +217,6 @@ export async function updatePaymentAction(
         paidAt: paid ? new Date() : null,
       },
     });
-    
-    // revalidatePath kaldırıldı - client state güncellemesi yeterli
-    // revalidatePath("/");
 
     return { success: true };
   } catch (error) {
@@ -264,9 +225,6 @@ export async function updatePaymentAction(
   }
 }
 
-/**
- * Tüm takipleri getir
- */
 export async function getTrackingAction() {
   try {
     const group = await getOrCreateDefaultGroup();
@@ -286,7 +244,6 @@ export async function getTrackingAction() {
       orderBy: [{ year: "asc" }, { month: "asc" }],
     });
     
-    // Format: MonthTracking tipine uygun
     const formatted: MonthTracking[] = trackings.map((tracking) => ({
       id: tracking.id,
       month: tracking.month,

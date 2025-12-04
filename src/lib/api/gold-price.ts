@@ -2,12 +2,6 @@ import type { GoldPriceSnapshot } from "@/types/gold-day";
 import { getMockGoldPrice } from "@/lib/mock-data";
 import { db } from "@/lib/db";
 
-/**
- * Altın fiyatı API servisi
- * Sadece CollectAPI kullanılıyor
- * Günlük 3 istek limiti: 08:00, 12:00, 16:00 (Türkiye saati)
- */
-
 interface GoldPriceAPIResponse {
   gram: number;
   quarter: number;
@@ -16,35 +10,24 @@ interface GoldPriceAPIResponse {
   updatedAt: string;
 }
 
-/**
- * Türkiye saatine göre şu anki saat (UTC+3)
- */
 function getTurkeyTime(): Date {
   const now = new Date();
-  // UTC'yi Türkiye saatine çevir (UTC+3)
   const turkeyTime = new Date(now.getTime() + (3 * 60 * 60 * 1000));
   return turkeyTime;
 }
 
-/**
- * İstek yapılabilir saatler: 08:00, 12:00, 16:00 (Türkiye saati)
- * Bu saatler dışında istek atılmaz
- */
 function canMakeRequestNow(): { allowed: boolean; nextRequestTime?: string; lastRequestTime?: string } {
   const turkeyTime = getTurkeyTime();
   const hour = turkeyTime.getHours();
   const minute = turkeyTime.getMinutes();
-  const currentTime = hour * 60 + minute; // Dakika cinsinden
+  const currentTime = hour * 60 + minute;
 
-  // İzin verilen saatler (dakika cinsinden)
   const allowedTimes = [
     8 * 60,   // 08:00
     12 * 60,  // 12:00
-    16 * 60   // 16:00
+    16 * 60
   ];
 
-  // Şu anki saat izin verilen saatlerden biri mi?
-  // 5 dakika tolerans (08:00-08:05, 12:00-12:05, 16:00-16:05)
   const isAllowedTime = allowedTimes.some(allowedTime => {
     return currentTime >= allowedTime && currentTime < allowedTime + 5;
   });
@@ -53,13 +36,11 @@ function canMakeRequestNow(): { allowed: boolean; nextRequestTime?: string; last
     return { allowed: true };
   }
 
-  // Bir sonraki izin verilen saati bul
   const nextAllowedTime = allowedTimes.find(time => time > currentTime) || allowedTimes[0];
   const nextHour = Math.floor(nextAllowedTime / 60);
   const nextMinute = nextAllowedTime % 60;
   const nextRequestTime = `${nextHour.toString().padStart(2, '0')}:${nextMinute.toString().padStart(2, '0')}`;
 
-  // Son istek zamanını bul (bugünkü izin verilen saatlerden en son geçen)
   const lastAllowedTime = [...allowedTimes].reverse().find(time => time <= currentTime);
   if (lastAllowedTime) {
     const lastHour = Math.floor(lastAllowedTime / 60);
@@ -68,13 +49,9 @@ function canMakeRequestNow(): { allowed: boolean; nextRequestTime?: string; last
     return { allowed: false, nextRequestTime, lastRequestTime };
   }
 
-  // Eğer hiçbir izin verilen saat geçmediyse, bugünkü ilk saat yarın olacak
   return { allowed: false, nextRequestTime: `Yarın ${nextRequestTime}` };
 }
 
-/**
- * CollectAPI - Tek API (günlük 3 istek: 08:00, 12:00, 16:00 Türkiye saati)
- */
 async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
   const apiToken = process.env.COLLECTAPI_TOKEN;
   
@@ -82,7 +59,6 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
     throw new Error("COLLECTAPI_TOKEN environment variable bulunamadı");
   }
 
-  // İstek yapılabilir saat kontrolü
   const timeCheck = canMakeRequestNow();
   if (!timeCheck.allowed) {
     throw new Error(
@@ -96,7 +72,6 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
     const response = await fetch(
       "https://api.collectapi.com/economy/goldPrice",
       {
-        // Cache yok - sadece izin verilen saatlerde istek atılır
         cache: 'no-store',
         headers: {
           "authorization": `apikey ${apiToken}`,
@@ -111,7 +86,6 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
 
     const data = await response.json();
     
-    // CollectAPI yapısına göre parse et
     let gram = 0;
     let quarter = 0;
     let half = 0;
@@ -121,7 +95,6 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
       data.result.forEach((item: any) => {
         const name = (item.name || "").toLowerCase();
         
-        // buying number olabilir veya buyingstr string olabilir
         let buying: number;
         if (item.buying !== undefined && item.buying !== null) {
           buying = typeof item.buying === "string" 
@@ -133,7 +106,6 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
           buying = 0;
         }
         
-        // Tam eşleşme kontrolü
         if (name === "gram altın") {
           gram = Math.round(buying);
         } else if (name === "çeyrek altın" && !name.includes("eski")) {
@@ -146,7 +118,6 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
       });
     }
     
-    // Eğer gram varsa ama diğerleri yoksa hesapla
     if (gram > 0 && quarter === 0) {
       quarter = Math.round(gram * 1.75);
     }
@@ -181,12 +152,8 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
   }
 }
 
-/**
- * Database'den cache'lenmiş fiyatları al
- */
 async function getCachedPrice(): Promise<GoldPriceSnapshot | null> {
   try {
-    // Prisma client'ın yeni modeli tanıyıp tanımadığını kontrol et
     if (!db.goldPriceCache) {
       return null;
     }
@@ -202,7 +169,6 @@ async function getCachedPrice(): Promise<GoldPriceSnapshot | null> {
     const turkeyTime = getTurkeyTime();
     const cacheTime = new Date(cache.requestTime);
     
-    // Cache bugün çekildiyse kullan
     if (
       cacheTime.getDate() === turkeyTime.getDate() &&
       cacheTime.getMonth() === turkeyTime.getMonth() &&
@@ -226,7 +192,6 @@ async function getCachedPrice(): Promise<GoldPriceSnapshot | null> {
 
     return null;
   } catch (error: any) {
-    // Eğer table yoksa (P2021) veya model tanınmıyorsa sessizce null döndür
     if (error?.code === 'P2021' || error?.message?.includes('does not exist') || error?.message?.includes('undefined')) {
       return null;
     }
@@ -235,12 +200,8 @@ async function getCachedPrice(): Promise<GoldPriceSnapshot | null> {
   }
 }
 
-/**
- * Database'e fiyat kaydet
- */
 async function setCachedPrice(price: GoldPriceSnapshot): Promise<void> {
   try {
-    // Prisma client'ın yeni modeli tanıyıp tanımadığını kontrol et
     if (!db.goldPriceCache) {
       return;
     }
@@ -264,46 +225,32 @@ async function setCachedPrice(price: GoldPriceSnapshot): Promise<void> {
       }
     });
   } catch (error: any) {
-    // Eğer table yoksa (P2021) veya model tanınmıyorsa sessizce devam et
     if (error?.code === 'P2021' || error?.message?.includes('does not exist') || error?.message?.includes('undefined')) {
       return;
     }
     console.error("Cache kaydetme hatası:", error);
-    // Hata olsa bile devam et
   }
 }
 
-/**
- * Ana fonksiyon: Altın fiyatlarını çeker
- * Günlük 3 istek: 08:00, 12:00, 16:00 (Türkiye saati)
- * Bu saatler dışında cache'den döner
- */
 export async function fetchGoldPrice(): Promise<GoldPriceSnapshot> {
-  // Önce cache'i kontrol et
   const cached = await getCachedPrice();
   if (cached) {
     return cached;
   }
 
-  // İzin verilen saatlerde istek at
   try {
     const result = await fetchFromCollectAPI();
-    // Başarılı sonucu cache'e kaydet
     await setCachedPrice(result);
     return result;
   } catch (error: any) {
-    // Eğer saat dışındaysa ve cache varsa cache'den dönsün
     if (error.message?.includes("İstek yapılamaz")) {
-      // Cache'den dön (eğer varsa)
       const cached = await getCachedPrice();
       if (cached) {
         return cached;
       }
-      // Cache yoksa mock data döndür
       return getMockGoldPrice();
     }
     
-    // Diğer hatalar için mock data
     console.error("CollectAPI hatası, mock data kullanılıyor:", error.message);
     return getMockGoldPrice();
   }

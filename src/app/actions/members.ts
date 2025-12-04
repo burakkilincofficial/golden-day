@@ -8,16 +8,8 @@ const memberSchema = z.object({
   name: z.string().min(1, "İsim gereklidir").max(50, "İsim çok uzun"),
 });
 
-/**
- * Varsayılan grup ID'si (şimdilik tek grup)
- * İleride çoklu grup desteği eklenebilir
- */
 const DEFAULT_GROUP_ID = "default-group";
 
-/**
- * Varsayılan grubu oluştur veya getir
- * Eğer table yoksa otomatik olarak oluşturur
- */
 async function getOrCreateDefaultGroup() {
   try {
     let group = await db.group.findFirst();
@@ -33,7 +25,6 @@ async function getOrCreateDefaultGroup() {
     
     return group;
   } catch (error: any) {
-    // Eğer table yoksa (P2021 hatası), schema'yı push et
     if (error?.code === 'P2021' || error?.message?.includes('does not exist')) {
       console.log('📦 Database schema bulunamadı, oluşturuluyor...');
       try {
@@ -41,7 +32,6 @@ async function getOrCreateDefaultGroup() {
         execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
         console.log('✅ Database schema oluşturuldu');
         
-        // Tekrar dene
         let group = await db.group.findFirst();
         if (!group) {
           group = await db.group.create({
@@ -61,18 +51,12 @@ async function getOrCreateDefaultGroup() {
   }
 }
 
-/**
- * Üye ekle
- */
 export async function addMemberAction(name: string) {
   try {
-    // Validation
     const validated = memberSchema.parse({ name });
     
-    // Varsayılan grubu al
     const group = await getOrCreateDefaultGroup();
     
-    // Üye ekle
     const member = await db.member.create({
       data: {
         name: validated.name.trim(),
@@ -80,9 +64,6 @@ export async function addMemberAction(name: string) {
       },
     });
     
-    // Tüm mevcut aylık takipler için ödeme kaydı oluştur
-    // NOT: Yeni tracking oluşturulmaz, sadece mevcut tracking'lere payment eklenir
-    // Kura çek butonuna basıldığında tracking'ler güncellenir
     const trackings = await db.monthTracking.findMany({
       where: { groupId: group.id },
       orderBy: [{ year: "asc" }, { month: "asc" }],
@@ -97,9 +78,6 @@ export async function addMemberAction(name: string) {
         },
       });
     }
-    
-    // revalidatePath kaldırıldı - client state güncellemesi yeterli
-    // revalidatePath("/");
     
     return { success: true, member };
   } catch (error) {
@@ -117,9 +95,6 @@ export async function addMemberAction(name: string) {
   }
 }
 
-/**
- * Üye sil
- */
 export async function removeMemberAction(memberId: string) {
   try {
     const member = await db.member.findUnique({
@@ -134,15 +109,9 @@ export async function removeMemberAction(memberId: string) {
       return { success: false, error: "Üye bulunamadı" };
     }
     
-    // NOT: Tracking'ler silinmez, sadece üye ve payment'ları silinir
-    // Kura çek butonuna basıldığında tracking'ler güncellenir
-    // Üyeyi sil (cascade ile ödemeler de silinir)
     await db.member.delete({
       where: { id: memberId },
     });
-    
-    // revalidatePath kaldırıldı - client state güncellemesi yeterli
-    // revalidatePath("/");
     
     return { success: true };
   } catch (error) {
@@ -151,15 +120,10 @@ export async function removeMemberAction(memberId: string) {
   }
 }
 
-/**
- * Üye güncelle
- */
 export async function updateMemberAction(memberId: string, newName: string) {
   try {
-    // Validation
     const validated = memberSchema.parse({ name: newName });
     
-    // Üyeyi bul
     const member = await db.member.findUnique({
       where: { id: memberId },
     });
@@ -168,18 +132,12 @@ export async function updateMemberAction(memberId: string, newName: string) {
       return { success: false, error: "Üye bulunamadı" };
     }
     
-    // Üye adını güncelle
     const updatedMember = await db.member.update({
       where: { id: memberId },
       data: {
         name: validated.name.trim(),
       },
     });
-    
-    // Tüm payment kayıtlarındaki memberName'i güncelle (eğer gerekirse)
-    // Not: Payment tablosunda memberName yok, sadece memberId var
-    // Ama tracking'lerde memberName kullanılıyor, bu yüzden tracking'leri de güncellemek gerekebilir
-    // Şimdilik sadece member adını güncelliyoruz, tracking'lerdeki memberName client-side güncellenecek
     
     return { success: true, member: updatedMember };
   } catch (error) {
@@ -197,9 +155,6 @@ export async function updateMemberAction(memberId: string, newName: string) {
   }
 }
 
-/**
- * Tüm üyeleri getir
- */
 export async function getMembersAction() {
   try {
     const group = await getOrCreateDefaultGroup();

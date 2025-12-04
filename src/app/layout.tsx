@@ -27,7 +27,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
           </header>
           <main className="flex-1 pb-6">{children}</main>
           <footer className="mt-auto border-t border-border pt-4 text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} GoldDay Manager
+            <div className="flex items-center justify-between">
+              <span>&copy; {new Date().getFullYear()} GoldDay Manager</span>
+              <span>Powered by bodesere</span>
+            </div>
           </footer>
         </div>
       </body>

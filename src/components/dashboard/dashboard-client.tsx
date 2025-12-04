@@ -37,7 +37,7 @@ import { Loader, LoaderOverlay } from "@/components/ui/loader";
 import { Shuffle, RefreshCw, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getGoldPriceAction } from "@/app/actions/gold-price";
-import { redrawLotsAction, updatePaymentAction } from "@/app/actions/tracking";
+import { redrawLotsAction, updatePaymentAction, getTrackingAction } from "@/app/actions/tracking";
 import { exportToExcel } from "@/lib/export-excel";
 
 interface DashboardClientProps {
@@ -80,20 +80,14 @@ export function DashboardClient({
   const [currentGoldPrice, setCurrentGoldPrice] = useState<GoldPriceSnapshot>(goldPrice);
   const [isRefreshingPrice, setIsRefreshingPrice] = useState(false);
 
-  // Members'ı her zaman sync et (üye ekleme/silme sonrası server'dan geliyor)
   useEffect(() => {
-    // Members'ı sync et (boş array de dahil)
     if (storeMembers.length !== members.length || 
         storeMembers.some((m, i) => m.id !== members[i]?.id || m.name !== members[i]?.name)) {
       setMembers(members);
     }
   }, [members, storeMembers, setMembers]);
 
-  // Tracking'leri her zaman database'den yükle (herkes aynı veriyi görsün)
-  // Sayfa yenilendiğinde database'den gelen props'u store'a yükle
   useEffect(() => {
-    // Tracking'leri database'den gelen props ile sync et
-    // Her zaman database'den gelen veriyi kullan (herkes aynı veriyi görsün)
     const trackingChanged =
       tracking.length !== initialTracking.length ||
       tracking.some((t, i) => t.id !== initialTracking[i]?.id);
@@ -103,11 +97,31 @@ export function DashboardClient({
     }
   }, [initialTracking, tracking, setTracking]);
 
-  // Store'dan güncel members'ı kullan (her zaman store'dan)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const result = await getTrackingAction();
+        if (result.success && result.trackings) {
+          const trackingChanged =
+            tracking.length !== result.trackings.length ||
+            tracking.some((t, i) => t.id !== result.trackings[i]?.id);
+
+          if (trackingChanged) {
+            setTracking(result.trackings);
+          }
+        }
+      } catch (error) {
+        console.error("Tracking güncelleme hatası:", error);
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [tracking, setTracking]);
+
   const currentMembers = storeMembers;
 
   const currentDate = new Date();
-  const activeMonthIndex = currentDate.getMonth() + 1; // 1-12 (Ocak-Aralık)
+  const activeMonthIndex = currentDate.getMonth() + 1;
   const activeYear = currentDate.getFullYear();
   const activeMonth =
     tracking.find((m) => m.month === activeMonthIndex && m.year === activeYear) ?? tracking[0];
@@ -134,7 +148,6 @@ export function DashboardClient({
                   setCurrentGoldPrice(newPrice);
                 } catch (error: any) {
                   console.error("Fiyat güncellenemedi:", error);
-                  // Kullanıcıya bilgi ver
                   if (error?.message?.includes("İstek yapılamaz")) {
                     alert(error.message);
                   }
@@ -411,9 +424,7 @@ export function DashboardClient({
                                   onChange={async () => {
                                     const newPaidStatus = !(payment?.paid || false);
                                     await updatePaymentAction(month.id, member.id, newPaidStatus);
-                                    // Store'u güncelle (optimistic update)
                                     togglePayment(month.month, member.id);
-                                    // Sayfayı yenileme - client state güncellemesi yeterli
                                   }}
                                 />
                               )}
@@ -430,7 +441,6 @@ export function DashboardClient({
         </Card>
       </section>
 
-      {/* Kura Çekme Onay Dialog */}
       <Dialog open={isDrawDialogOpen} onOpenChange={setIsDrawDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -458,20 +468,20 @@ export function DashboardClient({
                 setIsDrawDialogOpen(false);
                 setIsDrawing(true);
                 
-                // Gerçekçi bir delay ekle (1.5 saniye)
                 await new Promise((resolve) => setTimeout(resolve, 1500));
                 
-                // Server action ile kura çek
                 const result = await redrawLotsAction();
                 
-                if (result.success && result.trackings) {
-                  // Store'u güncelle
-                  setTracking(result.trackings);
+                if (result.success) {
+                  const trackingResult = await getTrackingAction();
+                  if (trackingResult.success && trackingResult.trackings) {
+                    setTracking(trackingResult.trackings);
+                  } else if (result.trackings) {
+                    setTracking(result.trackings);
+                  }
                 }
                 
                 setIsDrawing(false);
-                
-                // Sayfayı yenileme - client state güncellemesi yeterli
               }}
               disabled={isDrawing}
             >
