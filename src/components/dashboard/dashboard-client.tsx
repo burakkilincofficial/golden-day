@@ -79,18 +79,34 @@ export function DashboardClient({
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentGoldPrice, setCurrentGoldPrice] = useState<GoldPriceSnapshot>(goldPrice);
   const [isRefreshingPrice, setIsRefreshingPrice] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // İlk mount'ta props'tan gelen verileri store'a yükle (sadece bir kez)
-  const [isInitialized, setIsInitialized] = useState(false);
-  
+  // Persist middleware'in hydration'ını bekle
   useEffect(() => {
-    if (!isInitialized) {
-      // İlk mount'ta props'ları store'a yükle
+    setIsHydrated(true);
+  }, []);
+
+  // Members'ı her zaman sync et (üye ekleme/silme sonrası server'dan geliyor)
+  useEffect(() => {
+    // Members'ı sync et (boş array de dahil)
+    if (storeMembers.length !== members.length || 
+        storeMembers.some((m, i) => m.id !== members[i]?.id || m.name !== members[i]?.name)) {
       setMembers(members);
-      setTracking(initialTracking);
-      setIsInitialized(true);
     }
-  }, [isInitialized, members, initialTracking, setMembers, setTracking]);
+  }, [members, storeMembers, setMembers]);
+
+  // Tracking'leri sadece hydration sonrası ve store'da yoksa yükle
+  // Sayfa yenilendiğinde localStorage'dan tracking'ler otomatik yüklenir (persist middleware)
+  // Eğer localStorage'da yoksa ve props'ta varsa, yükle
+  useEffect(() => {
+    if (!isHydrated) return; // Hydration tamamlanana kadar bekle
+    
+    // Eğer store'da tracking yoksa ve props'ta varsa, yükle
+    // Ama eğer store'da tracking varsa (localStorage'dan yüklenmiş), props'u ignore et
+    if (tracking.length === 0 && initialTracking.length > 0) {
+      setTracking(initialTracking);
+    }
+  }, [isHydrated, initialTracking, tracking.length, setTracking]);
 
   // Store'dan güncel members'ı kullan (her zaman store'dan)
   const currentMembers = storeMembers;
