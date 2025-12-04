@@ -1,0 +1,7 @@
+# Vercel ignore file
+# Bu dosyalar deploy edilmeyecek
+
+.env.local
+.env*.local
+node_modules/.cache
+
