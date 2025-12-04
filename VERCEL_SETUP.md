@@ -22,7 +22,7 @@ Vercel KV oluşturulduğunda şu değişkenler otomatik eklenir:
 1. Vercel Dashboard → Projeniz → **Settings** → **Environment Variables**
 2. Yeni variable ekleyin:
    - **Name:** `COLLECTAPI_TOKEN`
-   - **Value:** `4ZZwtHsmG6YyzoLKhPAbCd:16zP4fvmbVbSAit1M7w398` (veya kendi token'ınız)
+   - **Value:** Kendi CollectAPI token'ınızı buraya yapıştırın
    - **Environment:** Production, Preview, Development (hepsini seçin)
 3. **Save** butonuna tıklayın
 
@@ -31,7 +31,7 @@ Vercel KV oluşturulduğunda şu değişkenler otomatik eklenir:
 Proje kök dizininde `.env.local` dosyası oluşturun:
 
 ```env
-COLLECTAPI_TOKEN=4ZZwtHsmG6YyzoLKhPAbCd:16zP4fvmbVbSAit1M7w398
+COLLECTAPI_TOKEN=your_collectapi_token_here
 
 # Vercel KV için (local'de çalışmaz, sadece production'da)
 # KV_REST_API_URL=

@@ -33,7 +33,7 @@ Proje kök dizininde `.env.local` dosyası oluşturun:
 POSTGRES_PRISMA_URL=your_postgres_url_here
 POSTGRES_URL_NON_POOLING=your_postgres_direct_url_here
 
-# CollectAPI Token
+# CollectAPI Token (Kendi token'ınızı buraya ekleyin)
 COLLECTAPI_TOKEN=your_collectapi_token_here
 ```
 
