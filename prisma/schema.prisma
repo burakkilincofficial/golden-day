@@ -1,0 +1,79 @@
+// Prisma Schema - Altın Günü Yönetim Sistemi
+// Vercel Postgres için yapılandırılmıştır
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+// Altın Günü Grubu (şimdilik tek grup, ileride çoklu grup eklenebilir)
+model Group {
+  id          String   @id @default(cuid())
+  name        String   @default("Altın Günü Grubu")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  members     Member[]
+  trackings   MonthTracking[]
+  
+  @@map("groups")
+}
+
+// Üyeler
+model Member {
+  id          String   @id @default(cuid())
+  name        String
+  groupId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payments    Payment[]
+  hostTrackings MonthTracking[] @relation("HostTracking")
+  
+  @@unique([groupId, name]) // Aynı grupta aynı isimde iki üye olamaz
+  @@map("members")
+}
+
+// Aylık Takip (12 ay için)
+model MonthTracking {
+  id          String   @id @default(cuid())
+  groupId     String
+  month       Int      // 1-12 (Ocak-Aralık)
+  year        Int      // Yıl (örn: 2024)
+  hostMemberId String? // Bu ayın ev sahibi
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  host        Member?  @relation("HostTracking", fields: [hostMemberId], references: [id], onDelete: SetNull)
+  payments    Payment[]
+  
+  @@unique([groupId, month, year]) // Aynı grup, ay ve yıl için tek kayıt
+  @@map("month_trackings")
+}
+
+// Ödeme Kayıtları (Kim, hangi ay için ödedi)
+model Payment {
+  id              String   @id @default(cuid())
+  memberId        String
+  monthTrackingId String
+  paid            Boolean  @default(false)
+  paidAt          DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  member          Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  monthTracking   MonthTracking @relation(fields: [monthTrackingId], references: [id], onDelete: Cascade)
+  
+  @@unique([memberId, monthTrackingId]) // Bir üye bir ay için sadece bir ödeme kaydı
+  @@map("payments")
+}
+
