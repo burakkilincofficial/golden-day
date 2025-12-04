@@ -20,8 +20,8 @@
 
 ### Environment Variables (Otomatik Eklenir):
 Vercel Postgres oluşturulduğunda şu değişkenler otomatik eklenir:
-- `POSTGRES_PRISMA_URL` (Connection Pooling URL)
-- `POSTGRES_URL_NON_POOLING` (Direct Connection URL)
+- `DATABASE_URL` (Connection Pooling URL - Prisma için)
+- `POSTGRES_URL` (Direct Connection URL - Migrations için)
 
 ## 2. Local Development için .env.local
 
