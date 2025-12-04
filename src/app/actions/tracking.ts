@@ -8,20 +8,49 @@ const DEFAULT_GROUP_ID = "default-group";
 
 /**
  * Varsayılan grubu oluştur veya getir
+ * Eğer table yoksa otomatik olarak oluşturur
  */
 async function getOrCreateDefaultGroup() {
-  let group = await db.group.findFirst();
-  
-  if (!group) {
-    group = await db.group.create({
-      data: {
-        id: DEFAULT_GROUP_ID,
-        name: "Altın Günü Grubu",
-      },
-    });
+  try {
+    let group = await db.group.findFirst();
+    
+    if (!group) {
+      group = await db.group.create({
+        data: {
+          id: DEFAULT_GROUP_ID,
+          name: "Altın Günü Grubu",
+        },
+      });
+    }
+    
+    return group;
+  } catch (error: any) {
+    // Eğer table yoksa (P2021 hatası), schema'yı push et
+    if (error?.code === 'P2021' || error?.message?.includes('does not exist')) {
+      console.log('📦 Database schema bulunamadı, oluşturuluyor...');
+      try {
+        const { execSync } = require('child_process');
+        execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
+        console.log('✅ Database schema oluşturuldu');
+        
+        // Tekrar dene
+        let group = await db.group.findFirst();
+        if (!group) {
+          group = await db.group.create({
+            data: {
+              id: DEFAULT_GROUP_ID,
+              name: "Altın Günü Grubu",
+            },
+          });
+        }
+        return group;
+      } catch (pushError) {
+        console.error('❌ Database schema oluşturulamadı:', pushError);
+        throw new Error('Database schema oluşturulamadı. Lütfen manuel olarak "npx prisma db push" çalıştırın.');
+      }
+    }
+    throw error;
   }
-  
-  return group;
 }
 
 /**
