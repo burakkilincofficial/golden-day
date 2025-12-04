@@ -173,6 +173,26 @@ export async function redrawLotsAction(seed?: number) {
       });
     }
     
+    // Fazla olan tracking'leri sil (eğer üye sayısı azaldıysa)
+    // Sadece oluşturulan tracking'lerin ID'lerini al
+    const createdTrackingIds = trackings.map((t) => t.id);
+    
+    // Tüm mevcut tracking'leri al
+    const allExistingTrackings = await db.monthTracking.findMany({
+      where: { groupId: group.id },
+    });
+    
+    // Oluşturulan tracking'lerin dışındaki tracking'leri sil
+    const trackingsToDelete = allExistingTrackings.filter(
+      (et) => !createdTrackingIds.includes(et.id)
+    );
+    
+    for (const toDelete of trackingsToDelete) {
+      await db.monthTracking.delete({
+        where: { id: toDelete.id },
+      });
+    }
+    
     // revalidatePath kaldırıldı - client state güncellemesi yeterli
     // revalidatePath("/");
 
