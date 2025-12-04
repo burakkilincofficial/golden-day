@@ -1,6 +1,5 @@
 import type { GoldPriceSnapshot } from "@/types/gold-day";
-import { canMakeRequest, recordRequest, getLastRequestTime, getTodayRequestCount } from "@/lib/kv";
-import { getCachedPrice, setCachedPrice } from "@/lib/cache";
+// KV kaldırıldı - Next.js built-in cache kullanılıyor
 
 /**
  * Altın fiyatı API servisi
@@ -25,21 +24,13 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
     throw new Error("COLLECTAPI_TOKEN environment variable bulunamadı");
   }
 
-  // Rate limiting kontrolü
-  const canRequest = await canMakeRequest();
-  if (!canRequest) {
-    const todayCount = await getTodayRequestCount();
-    const lastRequest = await getLastRequestTime();
-    throw new Error(
-      `Günlük istek limiti aşıldı (${todayCount}/3). Son istek: ${lastRequest || "bilinmiyor"}`
-    );
-  }
-
   try {
+    // Next.js built-in cache kullanılıyor (24 saat)
+    // Bu sayede günde sadece 1 istek atılır (cache sayesinde)
     const response = await fetch(
       "https://api.collectapi.com/economy/goldPrice",
       {
-        next: { revalidate: 86400 }, // 24 saat cache (günlük 3 istek için)
+        next: { revalidate: 86400 }, // 24 saat cache - günde maksimum 1 istek
         headers: {
           "authorization": `apikey ${apiToken}`,
           "content-type": "application/json"
@@ -108,10 +99,8 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
       throw new Error("Altın fiyatları parse edilemedi");
     }
 
-    // İstek başarılı, kaydet
-    await recordRequest();
-    const todayCount = await getTodayRequestCount();
-    console.log(`   ✅ İstek kaydedildi (Bugünkü istek: ${todayCount}/3)`);
+    // İstek başarılı (Next.js cache sayesinde günde sadece 1 istek atılır)
+    console.log(`   ✅ CollectAPI isteği başarılı`);
 
     return {
       gram: gram || Math.round(quarter / 1.75) || 2570,
@@ -547,13 +536,8 @@ async function fetchFromMockAPI(): Promise<GoldPriceAPIResponse> {
  * Cache kontrolü yapar, eğer güncel cache varsa onu kullanır
  */
 export async function fetchGoldPrice(): Promise<GoldPriceSnapshot> {
-  // Önce cache'i kontrol et
-  const cached = await getCachedPrice();
-  if (cached) {
-    console.log("📦 Cache'den fiyatlar alındı (yeni istek atılmadı)");
-    console.log(`   Cache zamanı: ${cached.timestamp}`);
-    return cached.data;
-  }
+  // Next.js built-in cache kullanılıyor (fetch'te next: { revalidate: 86400 })
+  // Cache kontrolü Next.js tarafından otomatik yapılıyor
 
   // CollectAPI varsa önce onu dene (en güvenilir)
   const apis = [];
@@ -595,8 +579,7 @@ export async function fetchGoldPrice(): Promise<GoldPriceSnapshot> {
       console.log(`   - Güncelleme: ${result.updatedAt}`);
       console.log("═══════════════════════════════════════");
       
-      // Başarılı sonucu cache'e kaydet
-      await setCachedPrice(result);
+      // Next.js cache otomatik olarak kaydediyor (fetch'te next: { revalidate: 86400 })
       
       return result;
     } catch (error) {
@@ -629,9 +612,7 @@ export async function fetchGoldPrice(): Promise<GoldPriceSnapshot> {
   
   const mockData = await fetchFromMockAPI();
   
-  // Mock data'yı da cache'e kaydet (bir sonraki istekte cache'den döner)
-  await setCachedPrice(mockData);
-  
+  // Mock data döndür (Next.js cache zaten yönetiyor)
   return mockData;
 }
 

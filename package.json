@@ -14,7 +14,6 @@
     "db:generate": "prisma generate"
   },
   "dependencies": {
-    "@vercel/kv": "^0.2.4",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.452.0",
