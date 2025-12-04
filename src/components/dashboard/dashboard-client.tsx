@@ -97,27 +97,6 @@ export function DashboardClient({
     }
   }, [initialTracking, tracking, setTracking]);
 
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const result = await getTrackingAction();
-        if (result.success && result.trackings) {
-          const trackingChanged =
-            tracking.length !== result.trackings.length ||
-            tracking.some((t, i) => t.id !== result.trackings[i]?.id);
-
-          if (trackingChanged) {
-            setTracking(result.trackings);
-          }
-        }
-      } catch (error) {
-        console.error("Tracking güncelleme hatası:", error);
-      }
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [tracking, setTracking]);
-
   const currentMembers = storeMembers;
 
   const currentDate = new Date();
@@ -472,13 +451,9 @@ export function DashboardClient({
                 
                 const result = await redrawLotsAction();
                 
-                if (result.success) {
-                  const trackingResult = await getTrackingAction();
-                  if (trackingResult.success && trackingResult.trackings) {
-                    setTracking(trackingResult.trackings);
-                  } else if (result.trackings) {
-                    setTracking(result.trackings);
-                  }
+                if (result.success && result.trackings) {
+                  setTracking(result.trackings);
+                  window.location.reload();
                 }
                 
                 setIsDrawing(false);

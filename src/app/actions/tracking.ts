@@ -166,6 +166,8 @@ export async function redrawLotsAction(seed?: number) {
       });
     }
 
+    revalidatePath("/");
+
     return { success: true, trackings };
   } catch (error) {
     console.error("Kura çekme hatası:", error);

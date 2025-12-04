@@ -4,6 +4,9 @@ import { getMembersAction } from "./actions/members";
 import { getTrackingAction } from "./actions/tracking";
 import type { Member, MonthTracking } from "@/types/gold-day";
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function HomePage() {
   // Database'den üyeleri çek (hata olursa boş array döner)
   let members: Member[] = [];
