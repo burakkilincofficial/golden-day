@@ -95,7 +95,8 @@ export async function addMemberAction(name: string) {
       });
     }
     
-    revalidatePath("/");
+    // revalidatePath kaldırıldı - client state güncellemesi yeterli
+    // revalidatePath("/");
     
     return { success: true, member };
   } catch (error) {
@@ -141,7 +142,8 @@ export async function removeMemberAction(memberId: string) {
       where: { id: memberId },
     });
     
-    revalidatePath("/");
+    // revalidatePath kaldırıldı - client state güncellemesi yeterli
+    // revalidatePath("/");
     
     return { success: true };
   } catch (error) {

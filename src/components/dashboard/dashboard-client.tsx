@@ -116,13 +116,18 @@ export function DashboardClient({
                 try {
                   const newPrice = await getGoldPriceAction();
                   setCurrentGoldPrice(newPrice);
-                } catch (error) {
+                } catch (error: any) {
                   console.error("Fiyat güncellenemedi:", error);
+                  // Kullanıcıya bilgi ver
+                  if (error?.message?.includes("İstek yapılamaz")) {
+                    alert(error.message);
+                  }
                 } finally {
                   setIsRefreshingPrice(false);
                 }
               }}
               disabled={isRefreshingPrice}
+              title="Günlük 3 istek: 08:00, 12:00, 16:00 (Türkiye saati)"
             >
               {isRefreshingPrice ? (
                 <>
@@ -351,11 +356,10 @@ export function DashboardClient({
                                 checked={payment?.paid || false}
                                 onChange={async () => {
                                   const newPaidStatus = !(payment?.paid || false);
-                                  await updatePaymentAction(month.id, member.id, newPaidStatus);
-                                  // Store'u güncelle
-                                  togglePayment(month.month, member.id);
-                                  // Sayfayı yenile (server-side sync için)
-                                  window.location.reload();
+                                    await updatePaymentAction(month.id, member.id, newPaidStatus);
+                                    // Store'u güncelle (optimistic update)
+                                    togglePayment(month.month, member.id);
+                                    // Sayfayı yenileme - client state güncellemesi yeterli
                                 }}
                               />
                             )}
@@ -412,8 +416,7 @@ export function DashboardClient({
                 
                 setIsDrawing(false);
                 
-                // Sayfayı yenile (server-side sync için)
-                window.location.reload();
+                // Sayfayı yenileme - client state güncellemesi yeterli
               }}
               disabled={isDrawing}
             >

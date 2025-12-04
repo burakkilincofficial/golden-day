@@ -81,3 +81,16 @@ model Payment {
   @@map("payments")
 }
 
+// Altın Fiyatı Cache (günlük 3 istek için)
+model GoldPriceCache {
+  id          String   @id @default("gold-price-cache") // Tek kayıt
+  gram        Float
+  quarter     Float
+  half        Float
+  full        Float
+  updatedAt   DateTime @default(now()) @updatedAt
+  requestTime DateTime // Son istek zamanı (Türkiye saati)
+
+  @@map("gold_price_cache")
+}
+

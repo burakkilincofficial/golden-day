@@ -161,8 +161,9 @@ export async function redrawLotsAction(seed?: number) {
       });
     }
     
-    revalidatePath("/");
-    
+    // revalidatePath kaldırıldı - client state güncellemesi yeterli
+    // revalidatePath("/");
+
     return { success: true, trackings };
   } catch (error) {
     console.error("Kura çekme hatası:", error);
@@ -221,8 +222,9 @@ export async function updatePaymentAction(
       },
     });
     
-    revalidatePath("/");
-    
+    // revalidatePath kaldırıldı - client state güncellemesi yeterli
+    // revalidatePath("/");
+
     return { success: true };
   } catch (error) {
     console.error("Ödeme güncelleme hatası:", error);

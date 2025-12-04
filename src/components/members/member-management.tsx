@@ -46,13 +46,14 @@ export function MemberManagement() {
         return;
       }
       
-      // Store'u güncelle
-      addMember(validated.name);
+      // Store'u güncelle (server action'dan dönen member'ı kullan)
+      if (result.member) {
+        addMember(validated.name);
+      }
       setNewMemberName("");
       setIsAddDialogOpen(false);
       
-      // Sayfayı yenile (server-side data sync için)
-      window.location.reload();
+      // Sayfayı yenileme - client state güncellemesi yeterli
     } catch (err) {
       if (err instanceof z.ZodError) {
         setError(err.errors[0]?.message ?? "Geçersiz giriş");
@@ -80,8 +81,7 @@ export function MemberManagement() {
     removeMember(memberId);
     setDeleteConfirm(null);
     
-    // Sayfayı yenile (server-side data sync için)
-    window.location.reload();
+    // Sayfayı yenileme - client state güncellemesi yeterli
   };
 
   return (
