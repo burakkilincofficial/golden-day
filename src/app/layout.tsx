@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import "@/app/globals.css";
+import { Navigation } from "@/components/navigation";
 
 export const metadata: Metadata = {
   title: "GoldDay Manager",
@@ -17,13 +19,16 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
           <header className="mb-6 flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-                GoldDay Manager
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Altın günü gruplarınızı dijital olarak yönetin.
-              </p>
+              <Link href="/" className="block">
+                <h1 className="text-xl font-semibold tracking-tight sm:text-2xl hover:text-gold transition-colors">
+                  GoldDay Manager
+                </h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Altın günü gruplarınızı dijital olarak yönetin.
+                </p>
+              </Link>
             </div>
+            <Navigation />
           </header>
           <main className="flex-1 pb-6">{children}</main>
           <footer className="mt-auto border-t border-border pt-4 text-xs text-muted-foreground">

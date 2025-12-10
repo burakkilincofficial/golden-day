@@ -166,6 +166,12 @@ export async function redrawLotsAction(seed?: number) {
       });
     }
 
+    // Kura çekildi olarak işaretle
+    await db.group.update({
+      where: { id: group.id },
+      data: { kuraCekildi: true },
+    });
+
     revalidatePath("/");
 
     return { success: true, trackings };
@@ -263,6 +269,213 @@ export async function getTrackingAction() {
   } catch (error) {
     console.error("Takip getirme hatası:", error);
     return { success: false, error: "Takip getirilirken bir hata oluştu", trackings: [] };
+  }
+}
+
+export async function getGroupAction() {
+  try {
+    const group = await getOrCreateDefaultGroup();
+    return { success: true, group };
+  } catch (error) {
+    console.error("Grup getirme hatası:", error);
+    return { success: false, error: "Grup getirilirken bir hata oluştu", group: null };
+  }
+}
+
+export async function setKuraCekildiAction(kuraCekildi: boolean) {
+  try {
+    const group = await getOrCreateDefaultGroup();
+    
+    await db.group.update({
+      where: { id: group.id },
+      data: { kuraCekildi },
+    });
+
+    revalidatePath("/");
+    return { success: true };
+  } catch (error) {
+    console.error("Kura durumu güncelleme hatası:", error);
+    return { success: false, error: "Kura durumu güncellenirken bir hata oluştu" };
+  }
+}
+
+/**
+ * 2025 yılındaki tüm tracking'leri siler (sadece 2026'dan başlamalı)
+ */
+export async function cleanupOldTrackingsAction() {
+  try {
+    const group = await getOrCreateDefaultGroup();
+    
+    // 2025 yılındaki tüm tracking'leri sil
+    const trackingsToDelete = await db.monthTracking.findMany({
+      where: {
+        groupId: group.id,
+        year: { lt: 2026 }, // 2026'dan küçük tüm yıllar
+      },
+    });
+    
+    for (const toDelete of trackingsToDelete) {
+      await db.monthTracking.delete({
+        where: { id: toDelete.id },
+      });
+    }
+
+    revalidatePath("/");
+    return { success: true, deletedCount: trackingsToDelete.length };
+  } catch (error) {
+    console.error("Eski tracking temizleme hatası:", error);
+    return { success: false, error: "Eski tracking'ler temizlenirken bir hata oluştu" };
+  }
+}
+
+/**
+ * Manuel olarak verilen kura sonuçlarını kaydeder
+ * @param assignments Array of { memberName: string, month: number } (1-12)
+ */
+export async function setManualKuraAction(assignments: Array<{ memberName: string; month: number }>) {
+  try {
+    const group = await getOrCreateDefaultGroup();
+    
+    const members = await db.member.findMany({
+      where: { groupId: group.id },
+    });
+
+    if (members.length === 0) {
+      return { success: false, error: "Üye yok, önce üye ekleyin" };
+    }
+
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    
+    // 2026 yılından başlayarak kaydet
+    const startYear = 2026;
+    
+    const trackings: MonthTracking[] = [];
+    
+    for (const assignment of assignments) {
+      const member = members.find((m) => 
+        m.name.toLowerCase().trim() === assignment.memberName.toLowerCase().trim()
+      );
+      
+      if (!member) {
+        console.warn(`Üye bulunamadı: ${assignment.memberName}`);
+        continue;
+      }
+      
+      const month = assignment.month;
+      const year = startYear; // 2026'dan başlıyoruz
+      
+      let tracking = await db.monthTracking.findFirst({
+        where: {
+          groupId: group.id,
+          month,
+          year,
+        },
+        include: { payments: true },
+      });
+      
+      if (tracking) {
+        tracking = await db.monthTracking.update({
+          where: { id: tracking.id },
+          data: { hostMemberId: member.id },
+          include: { payments: true },
+        });
+      } else {
+        tracking = await db.monthTracking.create({
+          data: {
+            groupId: group.id,
+            month,
+            year,
+            hostMemberId: member.id,
+          },
+          include: { payments: true },
+        });
+        
+        // Tüm üyeler için ödeme kayıtları oluştur
+        for (const m of members) {
+          await db.payment.create({
+            data: {
+              memberId: m.id,
+              monthTrackingId: tracking.id,
+              paid: false,
+            },
+          });
+        }
+        
+        const reloadedTracking = await db.monthTracking.findUnique({
+          where: { id: tracking.id },
+          include: { payments: true },
+        });
+        
+        if (reloadedTracking) {
+          tracking = reloadedTracking;
+        }
+      }
+      
+      const payments: PaymentStatus[] = members.map((m) => {
+        const payment = tracking.payments.find((p) => p.memberId === m.id);
+        return {
+          memberId: m.id,
+          memberName: m.name,
+          paid: payment?.paid || false,
+        };
+      });
+      
+      trackings.push({
+        id: tracking.id,
+        month: tracking.month,
+        year: tracking.year,
+        hostMemberId: tracking.hostMemberId || "",
+        hostMemberName: member.name,
+        payments,
+      });
+    }
+    
+    // 2025 yılındaki tüm tracking'leri sil (sadece 2026'dan başlamalı)
+    const trackingsToDelete = await db.monthTracking.findMany({
+      where: {
+        groupId: group.id,
+        year: { lt: 2026 }, // 2026'dan küçük tüm yıllar
+      },
+    });
+    
+    for (const toDelete of trackingsToDelete) {
+      await db.monthTracking.delete({
+        where: { id: toDelete.id },
+      });
+    }
+    
+    // Oluşturulan tracking'lerin dışındaki 2026 yılı tracking'lerini de sil
+    const createdTrackingIds = trackings.map((t) => t.id);
+    const all2026Trackings = await db.monthTracking.findMany({
+      where: {
+        groupId: group.id,
+        year: 2026,
+      },
+    });
+    
+    const extra2026Trackings = all2026Trackings.filter(
+      (t) => !createdTrackingIds.includes(t.id)
+    );
+    
+    for (const toDelete of extra2026Trackings) {
+      await db.monthTracking.delete({
+        where: { id: toDelete.id },
+      });
+    }
+    
+    // Kura çekildi olarak işaretle
+    await db.group.update({
+      where: { id: group.id },
+      data: { kuraCekildi: true },
+    });
+
+    revalidatePath("/");
+
+    return { success: true, trackings };
+  } catch (error) {
+    console.error("Manuel kura kaydetme hatası:", error);
+    return { success: false, error: "Manuel kura kaydedilirken bir hata oluştu" };
   }
 }
 

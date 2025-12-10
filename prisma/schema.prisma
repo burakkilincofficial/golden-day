@@ -19,6 +19,7 @@ datasource db {
 model Group {
   id          String   @id @default(cuid())
   name        String   @default("Altın Günü Grubu")
+  kuraCekildi Boolean  @default(false) // Kura çekilip çekilmediğini kontrol eder
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   

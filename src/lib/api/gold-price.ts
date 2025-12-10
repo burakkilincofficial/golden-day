@@ -152,6 +152,27 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
   }
 }
 
+function getRequestTimeSlot(time: Date): number | null {
+  const hour = time.getHours();
+  const minute = time.getMinutes();
+  const timeInMinutes = hour * 60 + minute;
+  
+  const allowedTimes = [
+    8 * 60,   // 08:00
+    12 * 60,  // 12:00
+    16 * 60   // 16:00
+  ];
+  
+  // İzin verilen saatlerden birinde mi? (5 dakika tolerans)
+  for (const allowedTime of allowedTimes) {
+    if (timeInMinutes >= allowedTime && timeInMinutes < allowedTime + 5) {
+      return allowedTime;
+    }
+  }
+  
+  return null;
+}
+
 async function getCachedPrice(): Promise<GoldPriceSnapshot | null> {
   try {
     if (!db.goldPriceCache) {
@@ -169,28 +190,66 @@ async function getCachedPrice(): Promise<GoldPriceSnapshot | null> {
     const turkeyTime = getTurkeyTime();
     const cacheTime = new Date(cache.requestTime);
     
-    if (
+    // Aynı gün kontrolü
+    const isSameDay = 
       cacheTime.getDate() === turkeyTime.getDate() &&
       cacheTime.getMonth() === turkeyTime.getMonth() &&
-      cacheTime.getFullYear() === turkeyTime.getFullYear()
-    ) {
-      return {
-        gram: Math.round(cache.gram),
-        quarter: Math.round(cache.quarter),
-        half: Math.round(cache.half),
-        full: Math.round(cache.full),
-        updatedAt: cache.updatedAt.toLocaleDateString("tr-TR", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZone: "Europe/Istanbul"
-        })
-      };
+      cacheTime.getFullYear() === turkeyTime.getFullYear();
+    
+    if (!isSameDay) {
+      return null; // Farklı gün, cache geçersiz
     }
-
-    return null;
+    
+    // Şu anki zaman slotunu kontrol et
+    const currentTimeSlot = getRequestTimeSlot(turkeyTime);
+    const cacheTimeSlot = getRequestTimeSlot(cacheTime);
+    
+    // Eğer şu an izin verilen saatlerden birindeysek
+    if (currentTimeSlot !== null) {
+      // Cache'in ne zaman yapıldığını kontrol et
+      const timeDiff = Math.abs(turkeyTime.getTime() - cacheTime.getTime());
+      const oneMinute = 60 * 1000;
+      
+      // Eğer cache aynı saat slotunda yapılmışsa ve 1 dakikadan az zaman geçmişse
+      // cache'i kullan (duplicate request'i önlemek için)
+      if (cacheTimeSlot === currentTimeSlot && timeDiff < oneMinute) {
+        return {
+          gram: Math.round(cache.gram),
+          quarter: Math.round(cache.quarter),
+          half: Math.round(cache.half),
+          full: Math.round(cache.full),
+          updatedAt: cache.updatedAt.toLocaleDateString("tr-TR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Europe/Istanbul"
+          })
+        };
+      }
+      
+      // İzin verilen saatlerden birindeyiz ve cache farklı saatte veya eski
+      // Yeni istek yapılmalı
+      return null;
+    }
+    
+    // Eğer şu an izin verilen saatlerden birinde değilsek, cache'i kullan
+    // (çünkü yeni istek yapamayız zaten)
+    return {
+      gram: Math.round(cache.gram),
+      quarter: Math.round(cache.quarter),
+      half: Math.round(cache.half),
+      full: Math.round(cache.full),
+      updatedAt: cache.updatedAt.toLocaleDateString("tr-TR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Europe/Istanbul"
+      })
+    };
   } catch (error: any) {
     if (error?.code === 'P2021' || error?.message?.includes('does not exist') || error?.message?.includes('undefined')) {
       return null;

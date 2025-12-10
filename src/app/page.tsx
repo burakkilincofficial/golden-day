@@ -1,7 +1,7 @@
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { getGoldPriceAction } from "./actions/gold-price";
 import { getMembersAction } from "./actions/members";
-import { getTrackingAction } from "./actions/tracking";
+import { getTrackingAction, getGroupAction } from "./actions/tracking";
 import type { Member, MonthTracking } from "@/types/gold-day";
 
 export const dynamic = 'force-dynamic';
@@ -11,6 +11,7 @@ export default async function HomePage() {
   // Database'den üyeleri çek (hata olursa boş array döner)
   let members: Member[] = [];
   let initialTracking: MonthTracking[] = [];
+  let kuraCekildi = false;
   
   try {
     const membersResult = await getMembersAction();
@@ -26,6 +27,13 @@ export default async function HomePage() {
   } catch (error) {
     console.error("Takip getirilemedi (database bağlantısı yok):", error);
     // Local'de database yoksa boş array ile devam et
+  }
+
+  try {
+    const groupResult = await getGroupAction();
+    kuraCekildi = groupResult.success && groupResult.group ? groupResult.group.kuraCekildi : false;
+  } catch (error) {
+    console.error("Grup bilgisi getirilemedi:", error);
   }
   
   // Gerçek API'den altın fiyatlarını çek
@@ -54,6 +62,7 @@ export default async function HomePage() {
         members={members}
         goldPrice={goldPrice}
         initialTracking={initialTracking}
+        kuraCekildi={kuraCekildi}
       />
     </div>
   );

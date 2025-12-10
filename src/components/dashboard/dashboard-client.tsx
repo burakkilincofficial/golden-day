@@ -44,6 +44,7 @@ interface DashboardClientProps {
   members: Member[];
   initialTracking: MonthTracking[];
   goldPrice: GoldPriceSnapshot;
+  kuraCekildi: boolean;
 }
 
 const monthLabels = [
@@ -64,7 +65,8 @@ const monthLabels = [
 export function DashboardClient({
   members,
   initialTracking,
-  goldPrice
+  goldPrice,
+  kuraCekildi
 }: DashboardClientProps) {
   const { 
     members: storeMembers, 
@@ -237,25 +239,27 @@ export function DashboardClient({
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="default"
-                size="sm"
-                type="button"
-                onClick={() => setIsDrawDialogOpen(true)}
-                disabled={currentMembers.length === 0 || isDrawing}
-              >
-                {isDrawing ? (
-                  <>
-                    <Loader size="sm" className="mr-2" />
-                    Çekiliyor...
-                  </>
-                ) : (
-                  <>
-                    <Shuffle className="mr-2 h-4 w-4" />
-                    Kura Çek
-                  </>
-                )}
-              </Button>
+              {!kuraCekildi && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  type="button"
+                  onClick={() => setIsDrawDialogOpen(true)}
+                  disabled={currentMembers.length === 0 || isDrawing}
+                >
+                  {isDrawing ? (
+                    <>
+                      <Loader size="sm" className="mr-2" />
+                      Çekiliyor...
+                    </>
+                  ) : (
+                    <>
+                      <Shuffle className="mr-2 h-4 w-4" />
+                      Kura Çek
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
