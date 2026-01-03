@@ -19,7 +19,7 @@ const kuraSonuclari = [
 
 export async function POST() {
   try {
-    const result = await setManualKuraAction(kuraSonuclari);
+    const result = await setManualKuraAction("default-group", kuraSonuclari);
     
     if (result.success) {
       return NextResponse.json({ 
