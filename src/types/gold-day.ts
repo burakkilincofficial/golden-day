@@ -22,6 +22,7 @@ export interface MonthTracking {
   year: number;
   hostMemberId: MemberId;
   hostMemberName: string;
+  preferredDeliveryDate?: string | null; // Ev sahibinin tercih ettiği teslimat tarihi (YYYY-MM-DD formatında)
   payments: PaymentStatus[];
 }
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FileText } from "lucide-react";
+import { Home, FileText, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Navigation() {
@@ -13,6 +13,11 @@ export function Navigation() {
       href: "/",
       label: "Ana Sayfa",
       icon: Home
+    },
+    {
+      href: "/yeni-grup",
+      label: "Yeni Grup",
+      icon: Plus
     },
     {
       href: "/kurallar",

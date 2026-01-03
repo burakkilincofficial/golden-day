@@ -15,11 +15,13 @@ datasource db {
   directUrl = env("POSTGRES_URL")
 }
 
-// Altın Günü Grubu (şimdilik tek grup, ileride çoklu grup eklenebilir)
+// Altın Günü Grubu
 model Group {
   id          String   @id @default(cuid())
   name        String   @default("Altın Günü Grubu")
   kuraCekildi Boolean  @default(false) // Kura çekilip çekilmediğini kontrol eder
+  shareCode   String?  @unique // Paylaşım kodu (opsiyonel, unique)
+  isDefault   Boolean  @default(false) // Varsayılan grup mu?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
@@ -52,6 +54,7 @@ model MonthTracking {
   month       Int      // 1-12 (Ocak-Aralık)
   year        Int      // Yıl (örn: 2024)
   hostMemberId String? // Bu ayın ev sahibi
+  preferredDeliveryDate DateTime? // Ev sahibinin tercih ettiği teslimat tarihi
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

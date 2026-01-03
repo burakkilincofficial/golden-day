@@ -10,7 +10,7 @@ interface GoldPriceAPIResponse {
   updatedAt: string;
 }
 
-function getTurkeyTime(): Date {
+export function getTurkeyTime(): Date {
   const now = new Date();
   const turkeyTime = new Date(now.getTime() + (3 * 60 * 60 * 1000));
   return turkeyTime;
@@ -93,26 +93,31 @@ async function fetchFromCollectAPI(): Promise<GoldPriceAPIResponse> {
     
     if (data.result && Array.isArray(data.result)) {
       data.result.forEach((item: any) => {
-        const name = (item.name || "").toLowerCase();
+        const name = (item.name || "").toLowerCase().trim();
         
-        let buying: number;
+        // buying zaten number olarak geliyor, direkt kullan
+        let buying: number = 0;
         if (item.buying !== undefined && item.buying !== null) {
-          buying = typeof item.buying === "string" 
-            ? parseFloat(item.buying.replace(/[^\d.,]/g, "").replace(",", "."))
-            : Number(item.buying);
+          if (typeof item.buying === "number") {
+            buying = item.buying;
+          } else if (typeof item.buying === "string") {
+            // String ise parse et (binlik ayırıcı nokta, ondalık virgül olabilir)
+            buying = parseFloat(item.buying.replace(/[^\d.,]/g, "").replace(",", "."));
+          }
         } else if (item.buyingstr) {
+          // buyingstr string olarak geliyor
           buying = parseFloat(item.buyingstr.replace(/[^\d.,]/g, "").replace(",", "."));
-        } else {
-          buying = 0;
         }
         
+        // İsim eşleştirmesi - API'den gelen tam isimlerle eşleştir
+        // "Eski" olanları hariç tut
         if (name === "gram altın") {
           gram = Math.round(buying);
         } else if (name === "çeyrek altın" && !name.includes("eski")) {
           quarter = Math.round(buying);
         } else if (name === "yarım altın" && !name.includes("eski")) {
           half = Math.round(buying);
-        } else if (name === "tam altın" && !name.includes("eski") && !name.includes("çeyrek") && !name.includes("yarım")) {
+        } else if (name === "tam altın" && !name.includes("eski")) {
           full = Math.round(buying);
         }
       });

@@ -8,19 +8,26 @@ const memberSchema = z.object({
   name: z.string().min(1, "İsim gereklidir").max(50, "İsim çok uzun"),
 });
 
-const DEFAULT_GROUP_ID = "default-group";
-
-async function getOrCreateDefaultGroup() {
+async function getOrCreateGroup(groupId: string) {
   try {
-    let group = await db.group.findFirst();
+    let group = await db.group.findUnique({
+      where: { id: groupId },
+    });
     
     if (!group) {
-      group = await db.group.create({
-        data: {
-          id: DEFAULT_GROUP_ID,
-          name: "Altın Günü Grubu",
-        },
-      });
+      // Eğer default-group ise varsayılan grup oluştur
+      if (groupId === "default-group") {
+        group = await db.group.create({
+          data: {
+            id: "default-group",
+            name: "Altın Günü Grubu",
+            isDefault: true,
+            kuraCekildi: false,
+          },
+        });
+      } else {
+        throw new Error("Grup bulunamadı");
+      }
     }
     
     return group;
@@ -32,12 +39,16 @@ async function getOrCreateDefaultGroup() {
         execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
         console.log('✅ Database schema oluşturuldu');
         
-        let group = await db.group.findFirst();
-        if (!group) {
+        let group = await db.group.findUnique({
+          where: { id: groupId },
+        });
+        if (!group && groupId === "default-group") {
           group = await db.group.create({
             data: {
-              id: DEFAULT_GROUP_ID,
+              id: "default-group",
               name: "Altın Günü Grubu",
+              isDefault: true,
+              kuraCekildi: false,
             },
           });
         }
@@ -51,11 +62,11 @@ async function getOrCreateDefaultGroup() {
   }
 }
 
-export async function addMemberAction(name: string) {
+export async function addMemberAction(name: string, groupId: string = "default-group") {
   try {
     const validated = memberSchema.parse({ name });
     
-    const group = await getOrCreateDefaultGroup();
+    const group = await getOrCreateGroup(groupId);
     
     const member = await db.member.create({
       data: {
@@ -155,9 +166,9 @@ export async function updateMemberAction(memberId: string, newName: string) {
   }
 }
 
-export async function getMembersAction() {
+export async function getMembersAction(groupId: string = "default-group") {
   try {
-    const group = await getOrCreateDefaultGroup();
+    const group = await getOrCreateGroup(groupId);
     
     const members = await db.member.findMany({
       where: { groupId: group.id },

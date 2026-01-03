@@ -4,19 +4,26 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import type { MonthTracking, PaymentStatus } from "@/types/gold-day";
 
-const DEFAULT_GROUP_ID = "default-group";
-
-async function getOrCreateDefaultGroup() {
+async function getOrCreateGroup(groupId: string) {
   try {
-    let group = await db.group.findFirst();
+    let group = await db.group.findUnique({
+      where: { id: groupId },
+    });
     
     if (!group) {
-      group = await db.group.create({
-        data: {
-          id: DEFAULT_GROUP_ID,
-          name: "Altın Günü Grubu",
-        },
-      });
+      // Eğer default-group ise varsayılan grup oluştur
+      if (groupId === "default-group") {
+        group = await db.group.create({
+          data: {
+            id: "default-group",
+            name: "Altın Günü Grubu",
+            isDefault: true,
+            kuraCekildi: false,
+          },
+        });
+      } else {
+        throw new Error("Grup bulunamadı");
+      }
     }
     
     return group;
@@ -28,12 +35,16 @@ async function getOrCreateDefaultGroup() {
         execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
         console.log('✅ Database schema oluşturuldu');
         
-        let group = await db.group.findFirst();
-        if (!group) {
+        let group = await db.group.findUnique({
+          where: { id: groupId },
+        });
+        if (!group && groupId === "default-group") {
           group = await db.group.create({
             data: {
-              id: DEFAULT_GROUP_ID,
+              id: "default-group",
               name: "Altın Günü Grubu",
+              isDefault: true,
+              kuraCekildi: false,
             },
           });
         }
@@ -47,9 +58,9 @@ async function getOrCreateDefaultGroup() {
   }
 }
 
-export async function redrawLotsAction(seed?: number) {
+export async function redrawLotsAction(groupId: string = "default-group", seed?: number) {
   try {
-    const group = await getOrCreateDefaultGroup();
+    const group = await getOrCreateGroup(groupId);
     
     const members = await db.member.findMany({
       where: { groupId: group.id },
@@ -146,6 +157,9 @@ export async function redrawLotsAction(seed?: number) {
         year: tracking.year,
         hostMemberId: tracking.hostMemberId || "",
         hostMemberName: hostMember.name,
+        preferredDeliveryDate: tracking.preferredDeliveryDate 
+          ? tracking.preferredDeliveryDate.toISOString().split('T')[0]
+          : null,
         payments,
       });
     }
@@ -233,9 +247,9 @@ export async function updatePaymentAction(
   }
 }
 
-export async function getTrackingAction() {
+export async function getTrackingAction(groupId: string = "default-group") {
   try {
-    const group = await getOrCreateDefaultGroup();
+    const group = await getOrCreateGroup(groupId);
     
     const trackings = await db.monthTracking.findMany({
       where: {
@@ -258,6 +272,9 @@ export async function getTrackingAction() {
       year: tracking.year,
       hostMemberId: tracking.hostMemberId || "",
       hostMemberName: tracking.host?.name || "",
+      preferredDeliveryDate: tracking.preferredDeliveryDate 
+        ? tracking.preferredDeliveryDate.toISOString().split('T')[0] // YYYY-MM-DD formatında
+        : null,
       payments: tracking.payments.map((payment) => ({
         memberId: payment.memberId,
         memberName: payment.member.name,
@@ -272,9 +289,9 @@ export async function getTrackingAction() {
   }
 }
 
-export async function getGroupAction() {
+export async function getGroupAction(groupId: string = "default-group") {
   try {
-    const group = await getOrCreateDefaultGroup();
+    const group = await getOrCreateGroup(groupId);
     return { success: true, group };
   } catch (error) {
     console.error("Grup getirme hatası:", error);
@@ -282,9 +299,9 @@ export async function getGroupAction() {
   }
 }
 
-export async function setKuraCekildiAction(kuraCekildi: boolean) {
+export async function setKuraCekildiAction(groupId: string = "default-group", kuraCekildi: boolean) {
   try {
-    const group = await getOrCreateDefaultGroup();
+    const group = await getOrCreateGroup(groupId);
     
     await db.group.update({
       where: { id: group.id },
@@ -300,11 +317,45 @@ export async function setKuraCekildiAction(kuraCekildi: boolean) {
 }
 
 /**
+ * Ev sahibinin tercih ettiği teslimat tarihini günceller
+ */
+export async function updatePreferredDeliveryDateAction(
+  monthTrackingId: string,
+  date: string | null // YYYY-MM-DD formatında veya null
+) {
+  try {
+    const tracking = await db.monthTracking.findUnique({
+      where: { id: monthTrackingId },
+    });
+
+    if (!tracking) {
+      return { success: false, error: "Takip kaydı bulunamadı" };
+    }
+
+    await db.monthTracking.update({
+      where: { id: monthTrackingId },
+      data: {
+        preferredDeliveryDate: date ? new Date(date) : null,
+      },
+    });
+
+    // Tüm olası path'leri revalidate et
+    revalidatePath("/");
+    revalidatePath("/grup");
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Teslimat tarihi güncelleme hatası:", error);
+    return { success: false, error: "Teslimat tarihi güncellenirken bir hata oluştu" };
+  }
+}
+
+/**
  * 2025 yılındaki tüm tracking'leri siler (sadece 2026'dan başlamalı)
  */
-export async function cleanupOldTrackingsAction() {
+export async function cleanupOldTrackingsAction(groupId: string = "default-group") {
   try {
-    const group = await getOrCreateDefaultGroup();
+    const group = await getOrCreateGroup(groupId);
     
     // 2025 yılındaki tüm tracking'leri sil
     const trackingsToDelete = await db.monthTracking.findMany({
@@ -332,9 +383,9 @@ export async function cleanupOldTrackingsAction() {
  * Manuel olarak verilen kura sonuçlarını kaydeder
  * @param assignments Array of { memberName: string, month: number } (1-12)
  */
-export async function setManualKuraAction(assignments: Array<{ memberName: string; month: number }>) {
+export async function setManualKuraAction(groupId: string = "default-group", assignments: Array<{ memberName: string; month: number }>) {
   try {
-    const group = await getOrCreateDefaultGroup();
+    const group = await getOrCreateGroup(groupId);
     
     const members = await db.member.findMany({
       where: { groupId: group.id },
@@ -427,6 +478,9 @@ export async function setManualKuraAction(assignments: Array<{ memberName: strin
         year: tracking.year,
         hostMemberId: tracking.hostMemberId || "",
         hostMemberName: member.name,
+        preferredDeliveryDate: tracking.preferredDeliveryDate 
+          ? tracking.preferredDeliveryDate.toISOString().split('T')[0]
+          : null,
         payments,
       });
     }

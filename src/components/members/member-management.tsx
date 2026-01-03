@@ -5,6 +5,7 @@ import { z } from "zod";
 import { useGoldDayStore } from "@/store/gold-day-store";
 import { addMemberAction, removeMemberAction, updateMemberAction, getMembersAction } from "@/app/actions/members";
 import { getTrackingAction } from "@/app/actions/tracking";
+import type { Member } from "@/types/gold-day";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,7 +27,11 @@ const memberSchema = z.object({
     .trim()
 });
 
-export function MemberManagement() {
+interface MemberManagementProps {
+  groupId?: string;
+}
+
+export function MemberManagement({ groupId = "default-group" }: MemberManagementProps) {
   const { members, addMember, removeMember, updateMember, setMembers, setTracking } = useGoldDayStore();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newMemberName, setNewMemberName] = useState("");
@@ -42,34 +47,41 @@ export function MemberManagement() {
       const validated = memberSchema.parse({ name: newMemberName });
       
       // Server action ile üye ekle
-      const result = await addMemberAction(validated.name);
+      const result = await addMemberAction(validated.name, groupId);
       
       if (!result.success) {
         setError(result.error || "Üye eklenirken bir hata oluştu");
         return;
       }
       
-      // Server'dan güncel üyeleri ve tracking'leri çek ve store'u güncelle
+      // Önce optimistically store'a ekle (anında görünmesi için)
+      if (result.member) {
+        const newMember: Member = {
+          id: result.member.id,
+          name: result.member.name,
+        };
+        const currentMembers = useGoldDayStore.getState().members;
+        setMembers([...currentMembers, newMember]);
+      }
+      
+      // Dialog'u kapat ve input'u temizle (anında feedback için)
+      setNewMemberName("");
+      setIsAddDialogOpen(false);
+      
+      // Server'dan güncel üyeleri ve tracking'leri çek ve store'u senkronize et
       const [membersResult, trackingResult] = await Promise.all([
-        getMembersAction(),
-        getTrackingAction()
+        getMembersAction(groupId),
+        getTrackingAction(groupId)
       ]);
       
+      // Store'u server'dan gelen verilerle güncelle (doğruluk için)
       if (membersResult.success) {
         setMembers(membersResult.members);
-      } else {
-        // Fallback: Store'a manuel ekle
-        if (result.member) {
-          addMember(validated.name);
-        }
       }
       
       if (trackingResult.success) {
         setTracking(trackingResult.trackings);
       }
-      
-      setNewMemberName("");
-      setIsAddDialogOpen(false);
     } catch (err) {
       if (err instanceof z.ZodError) {
         setError(err.errors[0]?.message ?? "Geçersiz giriş");
@@ -90,24 +102,28 @@ export function MemberManagement() {
       return;
     }
     
-    // Server'dan güncel üyeleri ve tracking'leri çek ve store'u güncelle
+    // Önce optimistically store'dan sil (anında görünmesi için)
+    const currentMembers = useGoldDayStore.getState().members;
+    setMembers(currentMembers.filter(m => m.id !== memberId));
+    
+    setDeleteConfirm(null);
+    
+    // Server'dan güncel üyeleri ve tracking'leri çek ve store'u senkronize et
     const [membersResult, trackingResult] = await Promise.all([
-      getMembersAction(),
-      getTrackingAction()
+      getMembersAction(groupId),
+      getTrackingAction(groupId)
     ]);
     
+    // Store'u server'dan gelen verilerle güncelle (doğruluk için)
     if (membersResult.success) {
       setMembers(membersResult.members);
     } else {
-      // Fallback: Store'dan manuel sil
-      removeMember(memberId);
+      // Fallback: Store'dan manuel sil (zaten yaptık)
     }
     
     if (trackingResult.success) {
       setTracking(trackingResult.trackings);
     }
-    
-    setDeleteConfirm(null);
   };
 
   const handleEditMember = async () => {
@@ -126,17 +142,20 @@ export function MemberManagement() {
         return;
       }
       
-      // Server'dan güncel üyeleri çek ve store'u güncelle
-      const membersResult = await getMembersAction();
-      if (membersResult.success) {
-        setMembers(membersResult.members);
-      } else {
-        // Fallback: Store'u manuel güncelle
-        updateMember(editingMember.id, validated.name);
-      }
+      // Önce optimistically store'u güncelle (anında görünmesi için)
+      const currentMembers = useGoldDayStore.getState().members;
+      setMembers(currentMembers.map(m => 
+        m.id === editingMember.id ? { ...m, name: validated.name } : m
+      ));
       
       setEditingMember(null);
       setEditMemberName("");
+      
+      // Server'dan güncel üyeleri çek ve store'u senkronize et
+      const membersResult = await getMembersAction(groupId);
+      if (membersResult.success) {
+        setMembers(membersResult.members);
+      }
     } catch (err) {
       if (err instanceof z.ZodError) {
         setError(err.errors[0]?.message ?? "Geçersiz giriş");

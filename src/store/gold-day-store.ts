@@ -5,6 +5,7 @@ import { createNewDraw } from "@/lib/mock-data";
 interface GoldDayState {
   members: Member[];
   tracking: MonthTracking[];
+  currentGroupId: string | null; // Hangi grubun verileri store'da
   togglePayment: (month: number, memberId: MemberId) => void; // month: 1-12
   resetPayments: () => void;
   addMember: (name: string) => void;
@@ -12,12 +13,14 @@ interface GoldDayState {
   updateMember: (memberId: MemberId, newName: string) => void;
   setMembers: (members: Member[]) => void;
   setTracking: (tracking: MonthTracking[]) => void;
+  setCurrentGroupId: (groupId: string | null) => void;
   redrawLots: () => void;
 }
 
 export const useGoldDayStore = create<GoldDayState>((set) => ({
   members: [],
   tracking: [],
+  currentGroupId: null,
   togglePayment: (month, memberId) =>
     set((state) => ({
       tracking: state.tracking.map((tracking) => {
@@ -113,6 +116,7 @@ export const useGoldDayStore = create<GoldDayState>((set) => ({
     }),
   setMembers: (members) => set({ members }),
   setTracking: (tracking) => set({ tracking }),
+  setCurrentGroupId: (groupId) => set({ currentGroupId: groupId }),
   redrawLots: () =>
     set((state) => {
       if (!state.members.length) {

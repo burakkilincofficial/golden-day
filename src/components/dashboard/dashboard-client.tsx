@@ -16,6 +16,7 @@ import {
   CardTitle
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -34,10 +35,10 @@ import {
 } from "@/components/ui/table";
 import { MemberManagement } from "@/components/members/member-management";
 import { Loader, LoaderOverlay } from "@/components/ui/loader";
-import { Shuffle, RefreshCw, Download } from "lucide-react";
+import { Shuffle, RefreshCw, Download, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getGoldPriceAction } from "@/app/actions/gold-price";
-import { redrawLotsAction, updatePaymentAction, getTrackingAction } from "@/app/actions/tracking";
+import { redrawLotsAction, updatePaymentAction, getTrackingAction, updatePreferredDeliveryDateAction } from "@/app/actions/tracking";
 import { exportToExcel } from "@/lib/export-excel";
 
 interface DashboardClientProps {
@@ -45,6 +46,9 @@ interface DashboardClientProps {
   initialTracking: MonthTracking[];
   goldPrice: GoldPriceSnapshot;
   kuraCekildi: boolean;
+  groupId?: string;
+  groupName?: string;
+  shareCode?: string | null;
 }
 
 const monthLabels = [
@@ -66,15 +70,20 @@ export function DashboardClient({
   members,
   initialTracking,
   goldPrice,
-  kuraCekildi
+  kuraCekildi,
+  groupId = "default-group",
+  groupName,
+  shareCode
 }: DashboardClientProps) {
   const { 
     members: storeMembers, 
     tracking, 
+    currentGroupId,
     togglePayment, 
     resetPayments,
     setMembers,
     setTracking,
+    setCurrentGroupId,
     redrawLots
   } = useGoldDayStore();
   const [isDrawDialogOpen, setIsDrawDialogOpen] = useState(false);
@@ -82,22 +91,23 @@ export function DashboardClient({
   const [currentGoldPrice, setCurrentGoldPrice] = useState<GoldPriceSnapshot>(goldPrice);
   const [isRefreshingPrice, setIsRefreshingPrice] = useState(false);
 
+  // Sadece grup değiştiğinde veya ilk yüklemede store'u güncelle
   useEffect(() => {
-    if (storeMembers.length !== members.length || 
-        storeMembers.some((m, i) => m.id !== members[i]?.id || m.name !== members[i]?.name)) {
+    // Eğer grup değiştiyse, store'u yeni grubun verileriyle güncelle
+    if (currentGroupId !== groupId) {
+      setCurrentGroupId(groupId);
       setMembers(members);
-    }
-  }, [members, storeMembers, setMembers]);
-
-  useEffect(() => {
-    const trackingChanged =
-      tracking.length !== initialTracking.length ||
-      tracking.some((t, i) => t.id !== initialTracking[i]?.id);
-
-    if (trackingChanged) {
+      setTracking(initialTracking);
+    } else if (currentGroupId === null) {
+      // İlk yükleme - store'u doldur
+      setCurrentGroupId(groupId);
+      setMembers(members);
       setTracking(initialTracking);
     }
-  }, [initialTracking, tracking, setTracking]);
+    // Aynı grup içinde store güncellemesi yapıldıysa (üye eklendi/silindi),
+    // props'tan gelen members'ı override etme - store'daki güncel veriyi koru
+  }, [groupId, currentGroupId]); // Sadece groupId değiştiğinde çalış
+
 
   const currentMembers = storeMembers;
 
@@ -125,19 +135,34 @@ export function DashboardClient({
               onClick={async () => {
                 setIsRefreshingPrice(true);
                 try {
-                  const newPrice = await getGoldPriceAction();
-                  setCurrentGoldPrice(newPrice);
+                  // İzin verilen saatler dışında bile zorla güncelle
+                  const response = await fetch("/api/force-update-gold-price");
+                  const result = await response.json();
+                  
+                  if (result.success && result.data) {
+                    setCurrentGoldPrice(result.data);
+                  } else {
+                    // Fallback: Normal action'ı dene
+                    const newPrice = await getGoldPriceAction();
+                    setCurrentGoldPrice(newPrice);
+                  }
                 } catch (error: any) {
                   console.error("Fiyat güncellenemedi:", error);
-                  if (error?.message?.includes("İstek yapılamaz")) {
-                    alert(error.message);
+                  // Fallback: Normal action'ı dene
+                  try {
+                    const newPrice = await getGoldPriceAction();
+                    setCurrentGoldPrice(newPrice);
+                  } catch (fallbackError: any) {
+                    if (fallbackError?.message?.includes("İstek yapılamaz")) {
+                      alert(fallbackError.message);
+                    }
                   }
                 } finally {
                   setIsRefreshingPrice(false);
                 }
               }}
               disabled={isRefreshingPrice}
-              title="Günlük 3 istek: 08:00, 12:00, 16:00 (Türkiye saati)"
+              title="Altın fiyatlarını güncelle (İzin verilen saatler dışında bile çalışır)"
             >
               {isRefreshingPrice ? (
                 <>
@@ -223,7 +248,7 @@ export function DashboardClient({
 
       <section className="grid gap-4 md:grid-cols-3">
         <div className="md:col-span-1">
-          <MemberManagement />
+          <MemberManagement groupId={groupId} />
         </div>
 
         <Card className="md:col-span-2">
@@ -376,7 +401,50 @@ export function DashboardClient({
                           )}
                         </TableCell>
                         <TableCell className="text-xs sm:text-sm">
-                          {month.hostMemberName || "-"}
+                          <div className="flex flex-col gap-1.5">
+                            <span className="font-medium">{month.hostMemberName || "-"}</span>
+                            {month.hostMemberId && (
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  <Calendar className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                  <Input
+                                    type="date"
+                                    value={month.preferredDeliveryDate || ""}
+                                    onChange={async (e) => {
+                                      const newDate = e.target.value || null;
+                                      const result = await updatePreferredDeliveryDateAction(month.id, newDate);
+                                      
+                                      if (result.success) {
+                                        // Store'u güncelle
+                                        const updatedTracking = tracking.map((t) =>
+                                          t.id === month.id
+                                            ? { ...t, preferredDeliveryDate: newDate }
+                                            : t
+                                        );
+                                        setTracking(updatedTracking);
+                                        
+                                        // Sayfayı yenile (veritabanından güncel veriyi almak için)
+                                        window.location.reload();
+                                      }
+                                    }}
+                                    className="h-7 text-[11px] px-2 py-0 w-full max-w-[140px]"
+                                    min={`${month.year}-${String(month.month).padStart(2, '0')}-01`}
+                                    max={`${month.year}-${String(month.month).padStart(2, '0')}-31`}
+                                    title="Altınları hangi gün getirmek istediğinizi seçin"
+                                    placeholder="Tarih seçin"
+                                  />
+                                </div>
+                                {month.preferredDeliveryDate && (
+                                  <span className="text-[10px] text-gold-soft ml-4">
+                                    📅 {new Date(month.preferredDeliveryDate).toLocaleDateString("tr-TR", {
+                                      day: "numeric",
+                                      month: "long"
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                         {currentMembers.map((member) => {
                           const payment = month.payments.find(
@@ -453,7 +521,7 @@ export function DashboardClient({
                 
                 await new Promise((resolve) => setTimeout(resolve, 1500));
                 
-                const result = await redrawLotsAction();
+                const result = await redrawLotsAction(groupId);
                 
                 if (result.success && result.trackings) {
                   setTracking(result.trackings);
