@@ -30,6 +30,10 @@ async function getOrCreateGroup(groupId: string) {
       }
     }
     
+    if (!group) {
+      throw new Error("Grup oluşturulamadı");
+    }
+    
     return group;
   } catch (error: any) {
     if (error?.code === 'P2021' || error?.message?.includes('does not exist')) {
@@ -52,6 +56,11 @@ async function getOrCreateGroup(groupId: string) {
             },
           });
         }
+        
+        if (!group) {
+          throw new Error("Grup oluşturulamadı");
+        }
+        
         return group;
       } catch (pushError) {
         console.error('❌ Database schema oluşturulamadı:', pushError);
