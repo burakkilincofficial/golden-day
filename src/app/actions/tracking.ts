@@ -218,9 +218,28 @@ function seededRandom(seed: number): () => number {
 export async function updatePaymentAction(
   monthTrackingId: string,
   memberId: string,
-  paid: boolean
+  paid: boolean,
+  groupId?: string
 ) {
   try {
+    // Eğer groupId verilmişse, tracking'in o gruba ait olduğunu kontrol et
+    if (groupId) {
+      const tracking = await db.monthTracking.findUnique({
+        where: { id: monthTrackingId },
+        select: { groupId: true },
+      });
+
+      if (!tracking) {
+        return { success: false, error: "Takip kaydı bulunamadı" };
+      }
+
+      // Grup kontrolü yap
+      const group = await getOrCreateGroup(groupId);
+      if (tracking.groupId !== group.id) {
+        return { success: false, error: "Bu işlem için yetkiniz yok" };
+      }
+    }
+
     await db.payment.upsert({
       where: {
         memberId_monthTrackingId: {
@@ -321,15 +340,25 @@ export async function setKuraCekildiAction(groupId: string = "default-group", ku
  */
 export async function updatePreferredDeliveryDateAction(
   monthTrackingId: string,
-  date: string | null // YYYY-MM-DD formatında veya null
+  date: string | null, // YYYY-MM-DD formatında veya null
+  groupId?: string
 ) {
   try {
     const tracking = await db.monthTracking.findUnique({
       where: { id: monthTrackingId },
+      select: { groupId: true },
     });
 
     if (!tracking) {
       return { success: false, error: "Takip kaydı bulunamadı" };
+    }
+
+    // Eğer groupId verilmişse, tracking'in o gruba ait olduğunu kontrol et
+    if (groupId) {
+      const group = await getOrCreateGroup(groupId);
+      if (tracking.groupId !== group.id) {
+        return { success: false, error: "Bu işlem için yetkiniz yok" };
+      }
     }
 
     await db.monthTracking.update({

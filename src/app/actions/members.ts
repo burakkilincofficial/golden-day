@@ -106,7 +106,7 @@ export async function addMemberAction(name: string, groupId: string = "default-g
   }
 }
 
-export async function removeMemberAction(memberId: string) {
+export async function removeMemberAction(memberId: string, groupId?: string) {
   try {
     const member = await db.member.findUnique({
       where: { id: memberId },
@@ -118,6 +118,14 @@ export async function removeMemberAction(memberId: string) {
     
     if (!member) {
       return { success: false, error: "Üye bulunamadı" };
+    }
+
+    // Eğer groupId verilmişse, member'ın o gruba ait olduğunu kontrol et
+    if (groupId) {
+      const group = await getOrCreateGroup(groupId);
+      if (member.groupId !== group.id) {
+        return { success: false, error: "Bu işlem için yetkiniz yok" };
+      }
     }
     
     await db.member.delete({
@@ -131,16 +139,25 @@ export async function removeMemberAction(memberId: string) {
   }
 }
 
-export async function updateMemberAction(memberId: string, newName: string) {
+export async function updateMemberAction(memberId: string, newName: string, groupId?: string) {
   try {
     const validated = memberSchema.parse({ name: newName });
     
     const member = await db.member.findUnique({
       where: { id: memberId },
+      select: { groupId: true },
     });
     
     if (!member) {
       return { success: false, error: "Üye bulunamadı" };
+    }
+
+    // Eğer groupId verilmişse, member'ın o gruba ait olduğunu kontrol et
+    if (groupId) {
+      const group = await getOrCreateGroup(groupId);
+      if (member.groupId !== group.id) {
+        return { success: false, error: "Bu işlem için yetkiniz yok" };
+      }
     }
     
     const updatedMember = await db.member.update({

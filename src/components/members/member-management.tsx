@@ -95,7 +95,7 @@ export function MemberManagement({ groupId = "default-group" }: MemberManagement
     // Son üye de silinebilir - kısıtlama kaldırıldı
     
     // Server action ile üye sil
-    const result = await removeMemberAction(memberId);
+    const result = await removeMemberAction(memberId, groupId);
     
     if (!result.success) {
       setError(result.error || "Üye silinirken bir hata oluştu");
@@ -135,7 +135,7 @@ export function MemberManagement({ groupId = "default-group" }: MemberManagement
       const validated = memberSchema.parse({ name: editMemberName });
       
       // Server action ile üye güncelle
-      const result = await updateMemberAction(editingMember.id, validated.name);
+      const result = await updateMemberAction(editingMember.id, validated.name, groupId);
       
       if (!result.success) {
         setError(result.error || "Üye güncellenirken bir hata oluştu");

@@ -412,7 +412,7 @@ export function DashboardClient({
                                     value={month.preferredDeliveryDate || ""}
                                     onChange={async (e) => {
                                       const newDate = e.target.value || null;
-                                      const result = await updatePreferredDeliveryDateAction(month.id, newDate);
+                                      const result = await updatePreferredDeliveryDateAction(month.id, newDate, groupId);
                                       
                                       if (result.success) {
                                         // Store'u güncelle
@@ -474,7 +474,7 @@ export function DashboardClient({
                                   checked={payment?.paid || false}
                                   onChange={async () => {
                                     const newPaidStatus = !(payment?.paid || false);
-                                    await updatePaymentAction(month.id, member.id, newPaidStatus);
+                                    await updatePaymentAction(month.id, member.id, newPaidStatus, groupId);
                                     togglePayment(month.month, member.id);
                                   }}
                                 />
